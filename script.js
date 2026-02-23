@@ -500,4 +500,5 @@
   resetCustomerUI();
   resetCalendarUI(t("Loading availability…", "جاري تحميل المواعيد…"));
   preloadAvailability();
+
 })();
