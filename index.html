@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title data-en="Revisit Booking — Abdo El Amir" data-ar="حجز المراجعة — عبده الأمير">حجز المراجعة — عبده الأمير</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Roboto -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;700;900&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+<header class="banner">
+  <div class="banner-overlay"></div>
+
+  <div class="topbar">
+    <div class="brand">
+      <img src="images/logo.png" alt="Abdo El Amir" class="logo">
+      <div class="brand-text">
+        <div class="brand-name" data-en="Abdo El Amir" data-ar="عبده الأمير">عبده الأمير</div>
+        <div class="brand-sub" data-en="Revisit Booking" data-ar="حجز المراجعة">حجز المراجعة</div>
+      </div>
+    </div>
+
+    <button class="lang-btn" id="langToggle" type="button">
+      <i class="fa-solid fa-language"></i>
+      <span id="langToggleText">EN</span>
+    </button>
+  </div>
+
+  <div class="banner-content">
+    <h1 data-en="Revisit Booking" data-ar="حجز المراجعة">حجز المراجعة</h1>
+    <p class="subtitle"
+       data-en="Booking starts after 15 days. No overbooking — each branch follows its daily capacity."
+       data-ar="الحجز يبدأ بعد ١٥ يوم. بدون Overbooking — كل فرع له طاقته اليومية.">
+      الحجز يبدأ بعد ١٥ يوم. بدون Overbooking — كل فرع له طاقته اليومية.
+    </p>
+
+    <div class="hero-icons">
+      <div class="hero-pill">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span data-en="Secure booking" data-ar="حجز آمن">حجز آمن</span>
+      </div>
+      <div class="hero-pill">
+        <i class="fa-solid fa-bolt"></i>
+        <span data-en="Fast search" data-ar="بحث سريع">بحث سريع</span>
+      </div>
+      <div class="hero-pill">
+        <i class="fa-solid fa-calendar-check"></i>
+        <span data-en="Smart availability" data-ar="توفر ذكي">توفر ذكي</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card">
+    <div class="card-head">
+      <div class="chip">
+        <i class="fa-solid fa-circle-info"></i>
+        <span id="ruleText" data-en="—" data-ar="—">—</span>
+      </div>
+
+      <div class="statusline">
+        <div class="status-dot" id="preloadDot"></div>
+        <div class="status-text" id="preloadText" data-en="Loading availability…" data-ar="جاري تحميل المواعيد…">جاري تحميل المواعيد…</div>
+      </div>
+    </div>
+
+    <div class="form">
+
+      <!-- Booking Branch selection -->
+      <div class="field">
+        <div class="label" data-en="Choose booking branch" data-ar="اختر فرع الحجز">اختر فرع الحجز</div>
+        <div class="control">
+          <i class="fa-solid fa-location-dot"></i>
+          <select id="bookingBranch"></select>
+        </div>
+        <div class="pill" id="bookingBranchPill"
+             data-en="Pick the branch you want to book at."
+             data-ar="اختار الفرع اللي تحب تحجز فيه.">
+          اختار الفرع اللي تحب تحجز فيه.
+        </div>
+      </div>
+
+      <!-- Phone -->
+      <div class="field">
+        <div class="label" data-en="Mobile number (Egypt)" data-ar="رقم الموبايل (مصر)">رقم الموبايل (مصر)</div>
+        <div class="control">
+          <i class="fa-solid fa-phone"></i>
+          <input id="phone" type="tel" inputmode="numeric"
+                 data-en-placeholder="010xxxxxxxx"
+                 data-ar-placeholder="010xxxxxxxx"
+                 placeholder="010xxxxxxxx">
+        </div>
+        <div class="pill" id="phonePill"
+             data-en="Enter a valid number (11 digits: 010/011/012/015)."
+             data-ar="اكتب رقم صحيح (١١ رقم يبدأ 010/011/012/015).">
+          اكتب رقم صحيح (١١ رقم يبدأ 010/011/012/015).
+        </div>
+      </div>
+
+      <!-- Customer box -->
+      <div class="customer" id="customerBox">
+        <div class="customer-title">
+          <i class="fa-solid fa-id-card"></i>
+          <span data-en="Customer details" data-ar="بيانات العميل">بيانات العميل</span>
+        </div>
+
+        <!-- Premium Data Source Badge -->
+        <div class="source-badge" id="sourceBadge" style="display:none">
+          <i class="fa-solid fa-database"></i>
+          <span data-en="Data source:" data-ar="مصدر البيانات:">مصدر البيانات:</span>
+          <strong id="sourceBranchName">—</strong>
+        </div>
+
+        <div class="customer-grid">
+          <div class="kv"><div class="k" data-en="Name" data-ar="الاسم">الاسم</div><div class="v" id="cName">—</div></div>
+          <div class="kv"><div class="k" data-en="Car model" data-ar="موديل العربية">موديل العربية</div><div class="v" id="cModel">—</div></div>
+          <div class="kv"><div class="k" data-en="Car color" data-ar="لون العربية">لون العربية</div><div class="v" id="cColor">—</div></div>
+          <div class="kv"><div class="k" data-en="Car year" data-ar="سنة العربية">سنة العربية</div><div class="v" id="cYear">—</div></div>
+          <div class="kv kv-wide"><div class="k" data-en="Film type" data-ar="نوع الفيلم">نوع الفيلم</div><div class="v" id="cFilm">—</div></div>
+        </div>
+      </div>
+
+      <!-- Calendar -->
+      <div class="field">
+        <div class="label" data-en="Pick a booking day" data-ar="اختر يوم الحجز">اختر يوم الحجز</div>
+
+        <div class="calendar-head">
+          <div class="cal-note" id="calNote" data-en="—" data-ar="—">—</div>
+          <div class="cal-actions">
+            <button class="btn ghost" id="prevBtn" type="button">
+              <i class="fa-solid fa-chevron-right"></i>
+              <span data-en="Prev" data-ar="السابق">السابق</span>
+            </button>
+            <button class="btn ghost" id="nextBtn" type="button">
+              <span data-en="Next" data-ar="التالي">التالي</span>
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="calendar" id="calendarGrid"></div>
+
+        <div class="picked">
+          <span class="picked-label" data-en="Selected day:" data-ar="اليوم المختار:">اليوم المختار:</span>
+          <span class="picked-value" id="pickedDate">—</span>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="field">
+        <div class="label" data-en="Notes (optional)" data-ar="ملاحظات (اختياري)">ملاحظات (اختياري)</div>
+        <div class="control">
+          <i class="fa-regular fa-pen-to-square"></i>
+          <input id="notes" type="text"
+                 data-en-placeholder="Example: issue / preferred time"
+                 data-ar-placeholder="مثال: مشكلة / وقت مناسب"
+                 placeholder="مثال: مشكلة / وقت مناسب">
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="actions">
+        <button class="btn primary" id="submitBtn" type="button" disabled>
+          <i class="fa-solid fa-circle-check"></i>
+          <span data-en="Confirm booking" data-ar="تأكيد الحجز">تأكيد الحجز</span>
+        </button>
+      </div>
+
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img src="images/logo.png" alt="Abdo El Amir" class="footer-logo">
+        <div>
+          <div class="footer-title" data-en="Abdo El Amir" data-ar="عبده الأمير">عبده الأمير</div>
+          <div class="footer-sub" data-en="Revisit Booking" data-ar="حجز المراجعة">حجز المراجعة</div>
+        </div>
+      </div>
+
+      <div class="footer-socials">
+        <a href="https://www.instagram.com/abdoelamirofficial/" target="_blank" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+        <a href="https://www.facebook.com/abdoelamercars/" target="_blank" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+        <a href="https://wa.me/201222665568" target="_blank" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+        <a href="https://abdoelamir.com/ar/" target="_blank" aria-label="Website"><i class="fas fa-globe"></i></a>
+      </div>
+    </div>
+
+    <p class="copyright">© 2026 Abdo El Amir</p>
+  </footer>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="script.js"></script>
+</body>
+</html>
