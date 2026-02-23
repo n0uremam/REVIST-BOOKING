@@ -14,7 +14,7 @@
 
   const DEFAULT_DAYS = 30;
   const AV_CACHE_TTL_MS = 60 * 1000;
-  const PRELOAD_PHONE = "01000000000"; // only to get availability in bootstrap
+  const PRELOAD_PHONE = "01000000000";
 
   // ===== UI =====
   const ruleText = document.getElementById("ruleText");
@@ -64,21 +64,20 @@
   // =======================
   // Helpers
   // =======================
+  function t(en, ar){ return lang === "en" ? en : ar; }
+
   function toastMsg(msg) {
     toast.textContent = msg;
     toast.classList.add("show");
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => toast.classList.remove("show"), 3200);
+    toast._t = setTimeout(() => toast.classList.remove("show"), 3600);
   }
 
   function setPreloadStatus(state) {
-    // state: "loading" | "ok" | "bad"
     preloadDot.classList.remove("ok", "bad");
     if (state === "ok") preloadDot.classList.add("ok");
     if (state === "bad") preloadDot.classList.add("bad");
   }
-
-  function t(en, ar){ return lang === "en" ? en : ar; }
 
   function normEgyptPhone(p) {
     const d = String(p || "").replace(/\D/g, "");
@@ -113,21 +112,74 @@
     }
   }
 
-  async function apiGet(branch, params) {
+  // ✅ Robust JSON fetch: detect HTML/non-JSON and show a clear message
+  async function apiGet(branch, params, retryOnce) {
     const url = branch.api + (branch.api.includes("?") ? "&" : "?") + params;
-    const r = await fetchWithTimeout(url, { method: "GET" }, 15000);
-    if (!r.ok) throw new Error(`${branch.key} HTTP ${r.status}`);
-    return await r.json();
+
+    let r;
+    try {
+      r = await fetchWithTimeout(url, { method: "GET" }, 15000);
+    } catch (e) {
+      if (!retryOnce) return apiGet(branch, params, true); // retry once
+      throw new Error(`${branch.key} network/timeout`);
+    }
+
+    const text = await r.text();
+    const ct = (r.headers.get("content-type") || "").toLowerCase();
+
+    // If it's HTML, deployment isn't public or returned error page
+    const looksHtml = ct.includes("text/html") || /^\s*</.test(text);
+
+    if (!r.ok) {
+      throw new Error(`${branch.key} HTTP ${r.status}`);
+    }
+
+    if (looksHtml) {
+      // show first chars (no spam)
+      const preview = text.replace(/\s+/g, " ").slice(0, 120);
+      throw new Error(
+        `${branch.key} returned HTML (NOT JSON). ` +
+        `Likely Web App is not public (Anyone) or wrong deployment.\nPreview: ${preview}`
+      );
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      const preview = text.replace(/\s+/g, " ").slice(0, 140);
+      throw new Error(`${branch.key} invalid JSON.\nPreview: ${preview}`);
+    }
   }
 
   async function apiPost(branch, body) {
-    const r = await fetchWithTimeout(branch.api, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }, 15000);
+    let r;
+    try {
+      r = await fetchWithTimeout(branch.api, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }, 15000);
+    } catch (e) {
+      throw new Error(`${branch.key} network/timeout`);
+    }
+
+    const text = await r.text();
+    const ct = (r.headers.get("content-type") || "").toLowerCase();
+    const looksHtml = ct.includes("text/html") || /^\s*</.test(text);
+
     if (!r.ok) throw new Error(`${branch.key} HTTP ${r.status}`);
-    return await r.json();
+
+    if (looksHtml) {
+      const preview = text.replace(/\s+/g, " ").slice(0, 120);
+      throw new Error(`${branch.key} POST returned HTML (NOT JSON).\nPreview: ${preview}`);
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      const preview = text.replace(/\s+/g, " ").slice(0, 140);
+      throw new Error(`${branch.key} invalid JSON (POST).\nPreview: ${preview}`);
+    }
   }
 
   function resetCustomerUI() {
@@ -190,6 +242,7 @@
 
   function fillBookingBranches() {
     if (!bookingBranchEl) return;
+    const keep = bookingBranchEl.value || "Nasr";
     bookingBranchEl.innerHTML = "";
     BRANCHES.forEach(b => {
       const opt = document.createElement("option");
@@ -197,48 +250,32 @@
       opt.textContent = (lang === "en" ? b.nameEn : b.nameAr);
       bookingBranchEl.appendChild(opt);
     });
-    // keep selection if possible
-    bookingBranchEl.value = bookingBranchEl.value || "Nasr";
+    bookingBranchEl.value = keep;
   }
 
   function translateDOM() {
     document.documentElement.lang = lang;
     document.documentElement.dir = (lang === "ar") ? "rtl" : "ltr";
 
-    // Replace text
     const trans = document.querySelectorAll("[data-en]");
     trans.forEach(el => {
       const v = el.dataset[lang];
       if (v != null) el.textContent = v;
     });
 
-    // Replace placeholders
     document.querySelectorAll("[data-en-placeholder]").forEach(el => {
       const ph = (lang === "en" ? el.dataset.enPlaceholder : el.dataset.arPlaceholder);
       if (ph != null) el.setAttribute("placeholder", ph);
     });
 
-    // Source badge branch name re-render if visible
-    if (sourceBadge && sourceBadge.style.display !== "none") {
-      // No branch object stored globally; keep current text as-is.
-      // (Optional: if you want exact re-render, store sourceBranchKey)
-    }
-
-    // Refresh branch dropdown labels
-    const currentKey = bookingBranchEl ? bookingBranchEl.value : "Nasr";
-    fillBookingBranches();
-    if (bookingBranchEl) bookingBranchEl.value = currentKey;
-
-    // Update toggle label
     langToggleText.textContent = (lang === "ar") ? "EN" : "AR";
+    fillBookingBranches();
   }
 
-  // ---------- Calendar Rendering ----------
   function weekdayName(dt) {
-    if (lang === "en") {
-      return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()];
-    }
-    return ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"][dt.getDay()];
+    return (lang === "en")
+      ? ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dt.getDay()]
+      : ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"][dt.getDay()];
   }
 
   function renderCalendarForBranch(avail, branch) {
@@ -259,13 +296,10 @@
     days.forEach((d) => {
       const el = document.createElement("div");
       el.className = "day " + (d.full ? "full" : "available");
-      el.dataset.iso = d.date;
 
       const [Y, M, D] = d.date.split("-").map(Number);
       const dt = new Date(Y, M - 1, D);
-      const label = (lang === "en")
-        ? `${weekdayName(dt)} ${String(D).padStart(2, "0")}/${String(M).padStart(2, "0")}`
-        : `${weekdayName(dt)} ${String(D).padStart(2, "0")}/${String(M).padStart(2, "0")}`;
+      const label = `${weekdayName(dt)} ${String(D).padStart(2, "0")}/${String(M).padStart(2, "0")}`;
 
       const meta = d.full
         ? t(`Full (${d.count}/${d.capacity})`, `ممتلئ (${d.count}/${d.capacity})`)
@@ -281,13 +315,14 @@
           pickedDate.textContent = d.date;
           updateSubmitEnabled();
         });
+      } else {
+        el.style.cursor = "not-allowed";
       }
 
       calendarGrid.appendChild(el);
     });
   }
 
-  // ---------- Load min date ----------
   async function loadMinDate() {
     const res = await apiGet(BRANCHES[0], "action=ping&t=" + Date.now());
     if (!res || !res.ok) throw new Error("Ping failed");
@@ -299,18 +334,18 @@
     );
   }
 
-  // ---------- Preload availability for selected booking branch ----------
+  // ✅ Preload availability for selected booking branch
   async function preloadAvailability() {
     setPreloadStatus("loading");
     preloadText.textContent = t("Loading availability…", "جاري تحميل المواعيد…");
+    resetCalendarUI(t("Loading…", "جاري التحميل…"));
 
     try {
       if (!minISO) await loadMinDate();
 
       const branch = getSelectedBookingBranch();
-
-      // Use cache if exists
       const cache = cacheGet_();
+
       if (cache && cache[branch.key]) {
         renderCalendarForBranch(cache[branch.key], branch);
         setPreloadStatus("ok");
@@ -323,7 +358,7 @@
       );
 
       if (!res || !res.ok || !res.availability || !res.availability.ok) {
-        throw new Error("Availability preload failed");
+        throw new Error(`${branch.key} availability preload failed`);
       }
 
       const byBranch = (cache || {});
@@ -331,18 +366,35 @@
       cacheSet_(byBranch);
 
       renderCalendarForBranch(res.availability, branch);
-
       setPreloadStatus("ok");
       preloadText.textContent = t("Availability ready", "المواعيد جاهزة");
+
     } catch (e) {
       setPreloadStatus("bad");
+
+      const branch = getSelectedBookingBranch();
+      const branchName = (lang === "en" ? branch.nameEn : branch.nameAr);
+
+      // ✅ Clear + actionable message
       preloadText.textContent = t("Availability failed", "فشل تحميل المواعيد");
-      resetCalendarUI(t("Connection error", "خطأ اتصال"));
-      toastMsg("CLIENT_ERROR\n" + String(e));
+
+      resetCalendarUI(
+        t(
+          `Cannot load availability for ${branchName}.`,
+          `تعذر تحميل مواعيد فرع ${branchName}.`
+        )
+      );
+
+      // ✅ This toast will show EXACT cause (HTML vs JSON, HTTP, etc.)
+      toastMsg(
+        t(
+          `Branch "${branchName}" is not returning JSON.\nMake sure Web App is deployed to: Anyone.\n\nDetails:\n${String(e)}`,
+          `فرع "${branchName}" لا يرجّع JSON.\nتأكد أن الـ Web App معمول Deploy على: Anyone.\n\nتفاصيل:\n${String(e)}`
+        )
+      );
     }
   }
 
-  // ---------- Lookup customer across all branches ----------
   async function lookupCustomerAllBranches(phone) {
     const tasks = BRANCHES.map(b =>
       apiGet(b, `action=bootstrap&phone=${encodeURIComponent(phone)}&start=${encodeURIComponent(currentStartISO)}&days=${DEFAULT_DAYS}&t=${Date.now()}`)
@@ -364,7 +416,6 @@
     return found;
   }
 
-  // ---------- Phone -> customer search (fast) ----------
   async function searchCustomer() {
     resetCustomerUI();
 
@@ -382,7 +433,6 @@
 
     try {
       if (!minISO) await loadMinDate();
-
       const found = await lookupCustomerAllBranches(phone);
 
       if (!found) {
@@ -391,12 +441,6 @@
       }
 
       setCustomerUI(found.customer, found.branch);
-
-      // Update badge text with current language
-      if (sourceBadge && sourceBadge.style.display !== "none") {
-        sourceBranchName.textContent = (lang === "en" ? found.branch.nameEn : found.branch.nameAr);
-      }
-
       phonePill.textContent = t("Customer data found ✅", "✅ تم العثور على بياناتك");
     } catch (e) {
       phonePill.textContent = t("Connection error", "خطأ اتصال");
@@ -410,7 +454,7 @@
     const phone = normEgyptPhone(phoneEl.value);
     const notes = String(notesEl.value || "").trim();
 
-    if (!customerFound) return toastMsg(t("Please enter your phone to load customer data first.", "لازم بياناتك تظهر الأول"));
+    if (!customerFound) return toastMsg(t("Please enter your phone first.", "لازم بياناتك تظهر الأول"));
     if (!selectedISO) return toastMsg(t("Pick an available day.", "اختار يوم متاح"));
 
     submitBtn.disabled = true;
@@ -452,7 +496,6 @@
     }
   }
 
-  // ===== Paging dates =====
   prevBtn.addEventListener("click", async () => {
     if (!minISO) return;
     const back = addDaysISO(currentStartISO, -DEFAULT_DAYS);
@@ -468,27 +511,21 @@
     await preloadAvailability();
   });
 
-  // ===== Booking branch changes -> preload calendar instantly (no waiting on phone) =====
   bookingBranchEl.addEventListener("change", async () => {
     cacheDrop_();
     await preloadAvailability();
-    // keep customer source badge as-is; booking branch doesn't affect it
   });
 
-  // ===== Phone debounce search =====
   let lookupTimer = null;
   phoneEl.addEventListener("input", () => {
     clearTimeout(lookupTimer);
-    lookupTimer = setTimeout(searchCustomer, 300);
+    lookupTimer = setTimeout(searchCustomer, 280);
   });
 
-  // ===== Language toggle =====
   langToggle.addEventListener("click", async () => {
     lang = (lang === "ar") ? "en" : "ar";
     translateDOM();
-    // Refresh dropdown labels + calendar display in new language
     await preloadAvailability();
-    // Refresh badge branch name language if customer already found (by re-search quickly)
     if (normEgyptPhone(phoneEl.value)) await searchCustomer();
   });
 
@@ -500,5 +537,4 @@
   resetCustomerUI();
   resetCalendarUI(t("Loading availability…", "جاري تحميل المواعيد…"));
   preloadAvailability();
-
 })();
