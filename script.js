@@ -113,55 +113,45 @@
   }
 
   // ✅ Robust JSON fetch: detect HTML/non-JSON and show a clear message
-  async function apiGet(branch, params, retryOnce) {
-    const url = branch.api + (branch.api.includes("?") ? "&" : "?") + params;
+async function apiGet(branch, params, retryOnce) {
+  const url = branch.api + (branch.api.includes("?") ? "&" : "?") + params;
 
-    let r;
-    try {
-      r = await fetchWithTimeout(url, { method: "GET" }, 15000);
-    } catch (e) {
-      if (!retryOnce) return apiGet(branch, params, true); // retry once
-      throw new Error(`${branch.key} network/timeout`);
-    }
-
-    const text = await r.text();
-    const ct = (r.headers.get("content-type") || "").toLowerCase();
-
-    // If it's HTML, deployment isn't public or returned error page
-    const looksHtml = ct.includes("text/html") || /^\s*</.test(text);
-
-    if (!r.ok) {
-      throw new Error(`${branch.key} HTTP ${r.status}`);
-    }
-
-    if (looksHtml) {
-      // show first chars (no spam)
-      const preview = text.replace(/\s+/g, " ").slice(0, 120);
-      throw new Error(
-        `${branch.key} returned HTML (NOT JSON). ` +
-        `Likely Web App is not public (Anyone) or wrong deployment.\nPreview: ${preview}`
-      );
-    }
-
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      const preview = text.replace(/\s+/g, " ").slice(0, 140);
-      throw new Error(`${branch.key} invalid JSON.\nPreview: ${preview}`);
-    }
+  let r;
+  try {
+    r = await fetchWithTimeout(url, { method: "GET" }, 15000);
+  } catch (e) {
+    if (!retryOnce) return apiGet(branch, params, true);
+    throw new Error(`${branch.key} network/timeout`);
   }
 
-  async function apiPost(branch, body) {
-    let r;
-    try {
-      r = await fetchWithTimeout(branch.api, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }, 15000);
-    } catch (e) {
-      throw new Error(`${branch.key} network/timeout`);
-    }
+  const text = await r.text();
+  const ct = (r.headers.get("content-type") || "").toLowerCase();
+  const looksHtml = ct.includes("text/html") || /^\s*</.test(text);
+
+  if (!r.ok) throw new Error(`${branch.key} HTTP ${r.status}`);
+
+  if (looksHtml) {
+    const preview = text.replace(/\s+/g, " ").slice(0, 140);
+    throw new Error(`${branch.key} returned HTML (NOT JSON). Preview: ${preview}`);
+  }
+
+  try { return JSON.parse(text); }
+  catch (e) {
+    const preview = text.replace(/\s+/g, " ").slice(0, 140);
+    throw new Error(`${branch.key} invalid JSON. Preview: ${preview}`);
+  }
+}
+
+async function apiCreate(branch, payload) {
+  const qs = new URLSearchParams({
+    action: "create",
+    phone: payload.phone,
+    bookingDate: payload.bookingDate,
+    notes: payload.notes || ""
+  }).toString();
+
+  return await apiGet(branch, qs);
+}
 
     const text = await r.text();
     const ct = (r.headers.get("content-type") || "").toLowerCase();
@@ -352,10 +342,11 @@
         preloadText.textContent = t("Availability ready", "المواعيد جاهزة");
         return;
       }
-
-      const res = await apiGet(branch,
-        `action=bootstrap&phone=${encodeURIComponent(PRELOAD_PHONE)}&start=${encodeURIComponent(currentStartISO)}&days=${DEFAULT_DAYS}&t=${Date.now()}`
-      );
+const res = await apiCreate(branch, {
+  phone,
+  bookingDate: selectedISO,
+  notes
+});
 
       if (!res || !res.ok || !res.availability || !res.availability.ok) {
         throw new Error(`${branch.key} availability preload failed`);
@@ -538,3 +529,4 @@
   resetCalendarUI(t("Loading availability…", "جاري تحميل المواعيد…"));
   preloadAvailability();
 })();
+
