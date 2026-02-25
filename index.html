@@ -4,142 +4,150 @@
   <meta charset="UTF-8" />
   <title>Abdo El Amir — Revisit Booking</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap" rel="stylesheet">
+
+  <!-- Roboto -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-  <link rel="stylesheet" href="styles.css" />
+
+  <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-<header class="topbar">
-  <div class="topbar-inner">
-    <div class="brand">
-      <img src="images/logo.png" class="brand-logo" alt="Abdo El Amir">
-      <div class="brand-text">
-        <div class="brand-title" data-en="Abdo El Amir" data-ar="عبده الأمير">Abdo El Amir</div>
-        <div class="brand-sub" data-en="Revisit Booking" data-ar="حجز مراجعة">Revisit Booking</div>
-      </div>
-    </div>
-    <div class="top-actions">
-      <button class="chip chip-ghost" id="langToggle"><i class="fa-solid fa-language"></i> AR</button>
+
+<header class="banner">
+  <div class="banner-overlay"></div>
+  <div class="banner-content fade-in">
+    <img src="images/logo.png" alt="Abdo El Amir" class="logo">
+
+    <h1 data-en="Abdo El Amir" data-ar="عبده الأمير">Abdo El Amir</h1>
+
+    <p class="subtitle"
+      data-en="Revisit Booking — Choose any branch. Booking starts after the minimum days."
+      data-ar="حجز المراجعة — اختار أي فرع. الحجز يبدأ بعد عدد الأيام المحدد.">
+      Revisit Booking — Choose any branch.
+    </p>
+
+    <div class="lang-toggle">
+      <button id="langToggle">AR</button>
     </div>
   </div>
 </header>
+
 <main class="wrap">
-  <section class="card hero reveal">
-    <div class="hero-left">
-      <h1 data-en="Book your revisit in seconds" data-ar="احجز مراجعتك في ثواني">Book your revisit in seconds</h1>
-      <p class="muted"
-         data-en="Enter your phone number to load your car details, then choose any branch and pick an available date."
-         data-ar="اكتب رقم الموبايل عشان تظهر بيانات العربية، وبعدها اختار أي فرع وحدد يوم متاح للحجز.">
-         Enter your phone number to load your car details, then choose any branch and pick an available date.
-      </p>
-      <div class="rule-pill" id="rulePill">
-        <i class="fa-solid fa-circle-info"></i>
-        <span id="minRuleText">—</span>
-      </div>
+
+  <!-- Phone Search -->
+  <section class="card reveal visible">
+    <div class="card-title">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <h2 data-en="Search by Mobile Number" data-ar="ابحث برقم الموبايل">Search by Mobile Number</h2>
     </div>
-    <div class="hero-right">
-      <div class="input-row">
-        <label class="lbl" data-en="Phone number" data-ar="رقم الموبايل">Phone number</label>
-        <div class="input-ico">
-          <i class="fa-solid fa-phone"></i>
-          <input id="phoneInput" inputmode="numeric" placeholder="010xxxxxxxxx" maxlength="11" />
+
+    <div class="row">
+      <div class="field">
+        <label data-en="Mobile Number" data-ar="رقم الموبايل">Mobile Number</label>
+        <input id="phoneInput" inputmode="numeric" placeholder="010xxxxxxxxx" maxlength="14">
+      </div>
+
+      <button id="searchBtn" class="primary">
+        <i class="fa-solid fa-bolt"></i>
+        <span data-en="Search" data-ar="بحث">Search</span>
+      </button>
+    </div>
+
+    <div id="lookupMsg" class="msg"></div>
+
+    <!-- Customer Panel -->
+    <div id="customerPanel" class="customer-panel hidden">
+      <div class="panel-head">
+        <div class="badge" id="sourceBadge">
+          <i class="fa-solid fa-crown"></i>
+          <span id="sourceBadgeText">—</span>
         </div>
-        <div class="hint muted" id="phoneHint">—</div>
       </div>
-      <div class="badge gold-badge" id="sourceBadge" style="display:none;">
-        <i class="fa-solid fa-star"></i>
-        <span id="sourceBadgeText">—</span>
-      </div>
-    </div>
-  </section>
-  <section class="card reveal">
-    <div class="card-head">
-      <h2 data-en="Customer details" data-ar="بيانات العميل">Customer details</h2>
-      <div class="status-pill" id="lookupStatus" style="display:none;"></div>
-    </div>
-    <div class="grid">
-      <div class="field">
-        <div class="k" data-en="Name" data-ar="الاسم">Name</div>
-        <div class="v" id="vName">—</div>
-      </div>
-      <div class="field">
-        <div class="k" data-en="Car model" data-ar="موديل العربية">Car model</div>
-        <div class="v" id="vModel">—</div>
-      </div>
-      <div class="field">
-        <div class="k" data-en="Car color" data-ar="لون العربية">Car color</div>
-        <div class="v" id="vColor">—</div>
-      </div>
-      <div class="field">
-        <div class="k" data-en="Car year" data-ar="سنة العربية">Car year</div>
-        <div class="v" id="vYear">—</div>
-      </div>
-      <div class="field field-wide">
-        <div class="k" data-en="Film type" data-ar="نوع الفيلِم">Film type</div>
-        <div class="v" id="vFilm">—</div>
+
+      <div class="grid">
+        <div class="info">
+          <div class="k" data-en="Name" data-ar="الاسم">Name</div>
+          <div class="v" id="cName">—</div>
+        </div>
+
+        <div class="info">
+          <div class="k" data-en="Car Model" data-ar="موديل العربية">Car Model</div>
+          <div class="v" id="cModel">—</div>
+        </div>
+
+        <div class="info">
+          <div class="k" data-en="Car Color" data-ar="لون العربية">Car Color</div>
+          <div class="v" id="cColor">—</div>
+        </div>
+
+        <div class="info">
+          <div class="k" data-en="Car Year" data-ar="سنة العربية">Car Year</div>
+          <div class="v" id="cYear">—</div>
+        </div>
+
+        <div class="info wide">
+          <div class="k" data-en="Type of Films" data-ar="نوع الفيلم">Type of Films</div>
+          <div class="v" id="cFilm">—</div>
+        </div>
       </div>
     </div>
   </section>
-  <section class="card reveal">
-    <div class="card-head">
-      <h2 data-en="Choose booking branch" data-ar="اختر فرع الحجز">Choose booking branch</h2>
-      <div class="muted small" data-en="You can book in any branch." data-ar="تقدر تحجز في أي فرع.">You can book in any branch.</div>
+
+  <!-- Branch -->
+  <section class="card reveal visible">
+    <div class="card-title">
+      <i class="fa-solid fa-location-dot"></i>
+      <h2 data-en="Choose Booking Branch" data-ar="اختر فرع الحجز">Choose Booking Branch</h2>
     </div>
-    <div class="branch-row">
-      <div class="select-ico">
-        <i class="fa-solid fa-location-dot"></i>
+
+    <div class="row">
+      <div class="field grow">
+        <label data-en="Branch" data-ar="الفرع">Branch</label>
         <select id="branchSelect"></select>
       </div>
-      <button class="chip" id="reloadAvailBtn" type="button">
-        <i class="fa-solid fa-rotate"></i>
-        <span data-en="Refresh" data-ar="تحديث">Refresh</span>
+
+      <div class="pill" id="minDatePill">
+        <i class="fa-solid fa-circle-info"></i>
+        <span id="minDateText">—</span>
+      </div>
+    </div>
+
+    <div id="availMsg" class="msg"></div>
+  </section>
+
+  <!-- Calendar -->
+  <section class="card reveal visible">
+    <div class="card-title">
+      <i class="fa-solid fa-calendar-days"></i>
+      <h2 data-en="Choose Booking Day" data-ar="اختر يوم الحجز">Choose Booking Day</h2>
+    </div>
+
+    <div class="calendar" id="calendar"></div>
+
+    <div class="row">
+      <div class="field grow">
+        <label data-en="Notes (optional)" data-ar="ملاحظات (اختياري)">Notes</label>
+        <input id="notesInput" placeholder="...">
+      </div>
+
+      <button id="createBtn" class="gold">
+        <i class="fa-solid fa-check"></i>
+        <span data-en="Confirm Booking" data-ar="تأكيد الحجز">Confirm Booking</span>
       </button>
     </div>
-    <div class="avail-state" id="availState">
-      <span class="dot dot-warn"></span>
-      <span class="muted" id="availStateText" data-en="Loading availability..." data-ar="جاري تحميل المواعيد...">Loading availability...</span>
-    </div>
+
+    <div id="createMsg" class="msg"></div>
   </section>
-  <section class="card reveal">
-    <div class="card-head">
-      <h2 data-en="Pick a day" data-ar="اختر يوم الحجز">Pick a day</h2>
-      <div class="nav-days">
-        <button class="chip chip-ghost" id="prevDays" type="button"><i class="fa-solid fa-chevron-left"></i></button>
-        <button class="chip chip-ghost" id="nextDays" type="button"><i class="fa-solid fa-chevron-right"></i></button>
-      </div>
-    </div>
-    <div class="days" id="daysWrap"></div>
-    <div class="selected-row">
-      <div class="selected-pill">
-        <i class="fa-solid fa-calendar-day"></i>
-        <span id="selectedDayText" data-en="No day selected" data-ar="لم يتم اختيار يوم">No day selected</span>
-      </div>
-    </div>
-    <div class="input-row">
-      <label class="lbl" data-en="Notes (optional)" data-ar="ملاحظات (اختياري)">Notes (optional)</label>
-      <div class="input-ico">
-        <i class="fa-solid fa-pen"></i>
-        <input id="notesInput" placeholder="—" />
-      </div>
-    </div>
-    <div class="actions">
-      <button class="btn-primary" id="confirmBtn" type="button">
-        <i class="fa-solid fa-circle-check"></i>
-        <span data-en="Confirm booking" data-ar="تأكيد الحجز">Confirm booking</span>
-      </button>
-    </div>
-  </section>
+
   <footer class="footer">
-    <div class="footer-socials">
-      <a href="https://www.instagram.com/abdoelamirofficial/" target="_blank" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
-      <a href="https://www.facebook.com/abdoelamercars/" target="_blank" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
-      <a href="https://wa.me/201222665568" target="_blank" aria-label="WhatsApp"><i class="fab fa-whatsapp"></i></a>
-      <a href="https://abdoelamir.com/ar/" target="_blank" aria-label="Website"><i class="fas fa-globe"></i></a>
-    </div>
     <p>© 2026 Abdo El Amir</p>
   </footer>
+
 </main>
-<div class="toast" id="toast" style="display:none;"></div>
+
 <script src="script.js"></script>
 </body>
 </html>
