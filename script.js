@@ -1,434 +1,326 @@
-"use strict";
+// ===== Branch WebApp URLs (your provided) =====
 const BRANCH_API = {
-  "October":   "https://script.google.com/macros/s/AKfycbySjCDtGsHh94ukD1XpHVWwiqXc7kzdQoAVEQyCnf66cI6-NhIYbnLWnYNK63XmWLiaqQ/exec",
-  "Zayed":     "https://script.google.com/macros/s/AKfycbymxUsSnwd7zYejyhiwuzuafJ9pfIzYqDTpOc9WIR-I3pMCMuJZ4a5XqPlyYmYTzmtv/exec",
-  "Maadi":     "https://script.google.com/macros/s/AKfycbyCBr6FPYhjTbndMvUCYNCSq9UseDPcbPQQLdol9KPTJnnnk1JXEi4DyW_bDrlYXylT1Q/exec",
-  "AUC":       "https://script.google.com/macros/s/AKfycbwibhM0RPkWsKkUJQ9My0ycfHhS9oo6PoEZ5sWlZByB8sT7n-QLMVqUsIYU4BoR59Lr4A/exec",
-  "Nasr City": "https://script.google.com/macros/s/AKfycbxwal_GJHeIhqhbFojUyt6a2yI8MKtwS0tg-YoPavgPF1rluPmzIElk9on9Uoxi1lpcDg/exec"
+  "Nasr City": "https://script.google.com/macros/s/AKfycbxwal_GJHeIhqhbFojUyt6a2yI8MKtwS0tg-YoPavgPF1rluPmzIElk9on9Uoxi1lpcDg/exec",
+  "AUC": "https://script.google.com/macros/s/AKfycbwibhM0RPkWsKkUJQ9My0ycfHhS9oo6PoEZ5sWlZByB8sT7n-QLMVqUsIYU4BoR59Lr4A/exec",
+  "Maadi": "https://script.google.com/macros/s/AKfycbyCBr6FPYhjTbndMvUCYNCSq9UseDPcbPQQLdol9KPTJnnnk1JXEi4DyW_bDrlYXylT1Q/exec",
+  "Zayed": "https://script.google.com/macros/s/AKfycbymxUsSnwd7zYejyhiwuzuafJ9pfIzYqDTpOc9WIR-I3pMCMuJZ4a5XqPlyYmYTzmtv/exec",
+  "October": "https://script.google.com/macros/s/AKfycbySjCDtGsHh94ukD1XpHVWwiqXc7kzdQoAVEQyCnf66cI6-NhIYbnLWnYNK63XmWLiaqQ/exec",
 };
-const AVAIL_DAYS = 21;
-const STEP_DAYS = 7;
-const LOOKUP_DEBOUNCE_MS = 350;
+
+const BRANCHES = Object.keys(BRANCH_API);
+
+// ===== UI =====
 let lang = "en";
-const state = {
-  phone: "",
-  customer: null,
-  sourceBranch: null,
-  bookingBranch: null,
-  minDateISO: null,
-  startISO: null,
-  selectedISO: null
-};
-const availabilityCache = new Map();
-const pingCache = new Map();
-const toggleBtn = document.getElementById("langToggle");
-const transEls = document.querySelectorAll("[data-en]");
+let selectedDateISO = "";
+let selectedBranch = BRANCHES[0];
+
+let customerCache = null; // { phone, name, carModel, ... , sourceBranch }
+let availabilityCache = {}; // key: branch -> availability object
+
 const phoneInput = document.getElementById("phoneInput");
-const phoneHint = document.getElementById("phoneHint");
-const lookupStatus = document.getElementById("lookupStatus");
-const vName = document.getElementById("vName");
-const vModel = document.getElementById("vModel");
-const vColor = document.getElementById("vColor");
-const vYear = document.getElementById("vYear");
-const vFilm = document.getElementById("vFilm");
-const sourceBadge = document.getElementById("sourceBadge");
+const searchBtn = document.getElementById("searchBtn");
+const lookupMsg = document.getElementById("lookupMsg");
+const customerPanel = document.getElementById("customerPanel");
+
+const cName = document.getElementById("cName");
+const cModel = document.getElementById("cModel");
+const cColor = document.getElementById("cColor");
+const cYear = document.getElementById("cYear");
+const cFilm = document.getElementById("cFilm");
 const sourceBadgeText = document.getElementById("sourceBadgeText");
+
 const branchSelect = document.getElementById("branchSelect");
-const reloadAvailBtn = document.getElementById("reloadAvailBtn");
-const availState = document.getElementById("availState");
-const availStateText = document.getElementById("availStateText");
-const daysWrap = document.getElementById("daysWrap");
-const prevDays = document.getElementById("prevDays");
-const nextDays = document.getElementById("nextDays");
-const selectedDayText = document.getElementById("selectedDayText");
+const minDateText = document.getElementById("minDateText");
+const availMsg = document.getElementById("availMsg");
+
+const calendar = document.getElementById("calendar");
 const notesInput = document.getElementById("notesInput");
-const confirmBtn = document.getElementById("confirmBtn");
-const minRuleText = document.getElementById("minRuleText");
-const toast = document.getElementById("toast");
-const revealEls = document.querySelectorAll(".reveal");
-const io = new IntersectionObserver((entries) => {
-  entries.forEach(e => {
-    if (!e.isIntersecting) return;
-    e.target.classList.add("visible");
-    io.unobserve(e.target);
-  });
-}, { threshold: 0.2 });
-revealEls.forEach(el => io.observe(el));
+const createBtn = document.getElementById("createBtn");
+const createMsg = document.getElementById("createMsg");
+
+const toggleBtn = document.getElementById("langToggle");
+const trans = document.querySelectorAll("[data-en]");
+
 function setLang(newLang){
   lang = newLang;
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
-  transEls.forEach(el => { el.textContent = el.dataset[lang]; });
-  toggleBtn.innerHTML = `<i class="fa-solid fa-language"></i> ${lang === "en" ? "AR" : "EN"}`;
-  renderSelectedText();
+  trans.forEach(el => el.textContent = el.dataset[lang]);
+  toggleBtn.textContent = lang === "en" ? "AR" : "EN";
 }
 toggleBtn.addEventListener("click", () => setLang(lang === "en" ? "ar" : "en"));
-function toastShow(msg){
-  toast.textContent = msg;
-  toast.style.display = "block";
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => toast.style.display = "none", 2600);
-}
-function normPhoneInput(v){
-  const d = String(v || "").replace(/\D/g, "");
-  let local = d.startsWith("20") ? d.slice(2) : d;
-  if (local.length === 10 && local.startsWith("1")) local = "0" + local;
-  return local.slice(0, 11);
+
+// ===== JSONP helper (CORS-proof) =====
+function jsonp(url, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const cbName = "cb_" + Math.random().toString(36).slice(2);
+    const script = document.createElement("script");
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("JSONP timeout"));
+    }, timeoutMs);
+
+    function cleanup() {
+      clearTimeout(timer);
+      if (script.parentNode) script.parentNode.removeChild(script);
+      try { delete window[cbName]; } catch (e) { window[cbName] = undefined; }
+    }
+
+    window[cbName] = (data) => {
+      cleanup();
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("JSONP network error"));
+    };
+
+    const sep = url.includes("?") ? "&" : "?";
+    script.src = url + sep + "callback=" + encodeURIComponent(cbName) + "&_=" + Date.now();
+    document.body.appendChild(script);
+  });
 }
 
-function isValidEgyptPhone(p){
-  return /^01[0125]\d{8}$/.test(p);
+// ===== Simple fetch JSON (for create) =====
+async function fetchJson(url) {
+  const r = await fetch(url, { method: "GET", cache: "no-store" });
+  const txt = await r.text();
+  try { return JSON.parse(txt); } catch(e) {
+    throw new Error("Non-JSON response");
+  }
 }
-function formatDMY(iso){
-  const [y,m,d] = String(iso).split("-");
-  return `${Number(d)}/${Number(m)}/${y}`;
+
+function normPhoneLocal(v){
+  const d = String(v||"").replace(/\D/g,"");
+  let local = d.startsWith("20") ? d.slice(2) : d;
+  if (local.length === 10 && local.startsWith("1")) local = "0" + local;
+  return local;
 }
-function todayISO(){
+
+function isoTodayPlus(n){
   const dt = new Date();
+  dt.setDate(dt.getDate()+n);
   const y = dt.getFullYear();
   const m = String(dt.getMonth()+1).padStart(2,"0");
   const d = String(dt.getDate()).padStart(2,"0");
   return `${y}-${m}-${d}`;
 }
-function addDaysISO(iso, n){
-  const [y,m,d] = iso.split("-").map(Number);
-  const dt = new Date(y, m-1, d);
-  dt.setDate(dt.getDate()+n);
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth()+1).padStart(2,"0");
-  const dd = String(dt.getDate()).padStart(2,"0");
-  return `${yy}-${mm}-${dd}`;
-}
-function debounce(fn, ms=300){
-  let t;
-  return (...args) => {
-    clearTimeout(t);
-    t = setTimeout(() => fn(...args), ms);
-  };
-}
-function buildUrl(base, params){
-  const u = new URL(base);
-  Object.entries(params).forEach(([k,v]) => u.searchParams.set(k, String(v)));
-  return u.toString();
-}
-async function fetchWithTimeout(url, timeoutMs=25000){
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try{
-    const res = await fetch(url, { method:"GET", signal: ctrl.signal, cache:"no-store" });
-    const txt = await res.text();
-    return { ok:true, status:res.status, text:txt };
-  }catch(e){
-    return { ok:false, error:String(e) };
-  }finally{
-    clearTimeout(t);
-  }
-}
-async function apiGet(base, params){
-  const url = buildUrl(base, params);
-  const r = await fetchWithTimeout(url, 25000);
-  if (!r.ok) throw new Error("network/timeout");
-  let j;
-  try{ j = JSON.parse(r.text); }
-  catch(e){ throw new Error("bad-json"); }
-  return j;
-}
+
+// ===== Init branch select =====
 function initBranches(){
   branchSelect.innerHTML = "";
-  Object.keys(BRANCH_API).forEach(name => {
+  BRANCHES.forEach(b=>{
     const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = (lang === "ar")
-      ? (name === "Nasr City" ? "مدينة نصر" :
-         name === "AUC" ? "التجمع الخامس" :
-         name === "Maadi" ? "المعادي" :
-         name === "Zayed" ? "الشيخ زايد" :
-         name === "October" ? "٦ أكتوبر" : name)
-      : name;
+    opt.value = b;
+    opt.textContent = (lang==="ar")
+      ? (b==="Nasr City"?"مدينة نصر":b==="AUC"?"التجمع الخامس":b==="Maadi"?"المعادي":b==="Zayed"?"الشيخ زايد":"٦ أكتوبر")
+      : b;
     branchSelect.appendChild(opt);
   });
-  branchSelect.value = state.bookingBranch;
+  branchSelect.value = selectedBranch;
 }
-branchSelect.addEventListener("change", async () => {
-  state.bookingBranch = branchSelect.value;
-  state.selectedISO = null;
-  renderSelectedText();
-  await loadAvailabilityForSelectedBranch(true);
-});
-reloadAvailBtn.addEventListener("click", async () => {
-  const key = cacheKey(state.bookingBranch, state.startISO, AVAIL_DAYS);
-  availabilityCache.delete(key);
-  await loadAvailabilityForSelectedBranch(true);
-});
-prevDays.addEventListener("click", async () => {
-  state.startISO = addDaysISO(state.startISO, -STEP_DAYS);
-  if (state.startISO < state.minDateISO) state.startISO = state.minDateISO;
-  state.selectedISO = null;
-  renderSelectedText();
-  await loadAvailabilityForSelectedBranch(true);
-});
-nextDays.addEventListener("click", async () => {
-  state.startISO = addDaysISO(state.startISO, STEP_DAYS);
-  state.selectedISO = null;
-  renderSelectedText();
-  await loadAvailabilityForSelectedBranch(true);
-});
-async function pingAllBranches(){
-  const tasks = Object.entries(BRANCH_API).map(async ([branch, base]) => {
-    try{
-      const j = await apiGet(base, { action:"ping" });
-      if (j && j.ok) pingCache.set(branch, j);
-    }catch(e){
-    }
-  });
-  await Promise.allSettled(tasks);
-  let maxMin = addDaysISO(todayISO(), 12);
-  pingCache.forEach(v => {
-    if (v.minDate && v.minDate > maxMin) maxMin = v.minDate;
-  });
-  state.minDateISO = maxMin;
-  state.startISO = state.minDateISO;
-  minRuleText.textContent = (lang === "ar")
-    ? `الحجز يبدأ من تاريخ ${formatDMY(state.minDateISO)} (بعد ${daysDiff(todayISO(), state.minDateISO)} يوم).`
-    : `Booking starts from ${formatDMY(state.minDateISO)} (in ${daysDiff(todayISO(), state.minDateISO)} days).`;
-}
-function daysDiff(aISO, bISO){
-  const [ay,am,ad] = aISO.split("-").map(Number);
-  const [by,bm,bd] = bISO.split("-").map(Number);
-  const a = new Date(ay,am-1,ad).getTime();
-  const b = new Date(by,bm-1,bd).getTime();
-  return Math.max(0, Math.round((b-a)/(24*3600*1000)));
-}
-function cacheKey(branch, startISO, days){ return `${branch}|${startISO}|${days}`; }
-async function getAvailability(branch, startISO, days){
-  const base = BRANCH_API[branch];
-  const key = cacheKey(branch, startISO, days);
-  if (availabilityCache.has(key)) return availabilityCache.get(key);
-  const prom = apiGet(base, { action:"availability", start:startISO, days })
-    .then(j => {
-      if (!j || !j.ok || !j.availability || !j.availability.ok) throw new Error("bad-availability");
-      return j.availability;
-    });
+initBranches();
 
-  availabilityCache.set(key, prom);
-  return prom;
-}
-async function preloadAllAvailability(){
-  const tasks = Object.keys(BRANCH_API).map(async (b) => {
-    try{ await getAvailability(b, state.startISO, AVAIL_DAYS); } catch(e) {}
-  });
-  await Promise.allSettled(tasks);
-}
-function setAvailState(kind, text){
-  const dot = availState.querySelector(".dot");
-  dot.className = "dot " + (kind === "ok" ? "dot-ok" : kind === "bad" ? "dot-bad" : "dot-warn");
-  availStateText.textContent = text;
-}
-async function loadAvailabilityForSelectedBranch(showToastOnFail=false){
-  setAvailState("warn", lang === "ar" ? "جاري تحميل المواعيد..." : "Loading availability...");
-  daysWrap.innerHTML = "";
-  try{
-    const av = await getAvailability(state.bookingBranch, state.startISO, AVAIL_DAYS);
-    renderDays(av.days);
-    setAvailState("ok", lang === "ar" ? "تم تحميل المواعيد." : "Availability loaded.");
-  }catch(e){
-    setAvailState("bad", lang === "ar" ? "فشل تحميل المواعيد." : "Failed to load availability.");
-    if (showToastOnFail) toastShow(lang === "ar" ? "حصل خطأ في تحميل المواعيد" : "Availability error");
+branchSelect.addEventListener("change", async () => {
+  selectedBranch = branchSelect.value;
+  selectedDateISO = "";
+  createMsg.textContent = "";
+  await preloadBranchAvailability(selectedBranch);
+  renderCalendar(selectedBranch);
+});
+
+// Rebuild labels on language change
+toggleBtn.addEventListener("click", () => {
+  initBranches();
+  if (availabilityCache[selectedBranch]) renderCalendar(selectedBranch);
+});
+
+// ===== Preload Ping + Availability =====
+async function preloadBranchAvailability(branch){
+  availMsg.className = "msg";
+  availMsg.textContent = (lang==="ar") ? "جاري تحميل المواعيد..." : "Loading availability...";
+
+  const api = BRANCH_API[branch];
+  try {
+    // ping normal JSON
+    const ping = await fetchJson(api + "?action=ping&_=" + Date.now());
+    const minDate = ping.minDate || isoTodayPlus(12);
+    minDateText.textContent = (lang==="ar")
+      ? `الحجز يبدأ من تاريخ ${formatDMY(minDate)}`
+      : `Booking starts from ${formatDMY(minDate)}`;
+
+    // availability via JSONP (Netlify-safe)
+    const days = 30;
+    const url = api + "?action=availability_jsonp&start=" + encodeURIComponent(minDate) + "&days=" + days;
+    const res = await jsonp(url, 20000);
+
+    if (!res || !res.ok || !res.availability) throw new Error("Bad availability response");
+    availabilityCache[branch] = res.availability;
+
+    availMsg.className = "msg ok";
+    availMsg.textContent = (lang==="ar") ? "تم تحميل المواعيد" : "Availability loaded";
+  } catch (err) {
+    availabilityCache[branch] = null;
+    availMsg.className = "msg bad";
+    availMsg.textContent = (lang==="ar") ? ("فشل تحميل المواعيد: " + err.message) : ("Availability error: " + err.message);
+    calendar.innerHTML = "";
   }
 }
-function renderDays(days){
-  daysWrap.innerHTML = "";
-  days.forEach(d => {
-    const el = document.createElement("div");
-    el.className = "day" + (state.selectedISO === d.date ? " selected" : "");
-    el.dataset.iso = d.date;
-    const title = document.createElement("div");
-    title.className = "d";
-    title.textContent = formatDMY(d.date);
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.textContent = (lang === "ar")
-      ? `السعة: ${d.capacity} — المحجوز: ${d.count}`
-      : `Cap: ${d.capacity} — Booked: ${d.count}`;
-    const pill = document.createElement("div");
-    pill.className = "pill " + (d.full ? "full" : "ok");
-    pill.innerHTML = d.full
-      ? `<i class="fa-solid fa-ban"></i> ${lang === "ar" ? "ممتلئ" : "Full"}`
-      : `<i class="fa-solid fa-check"></i> ${lang === "ar" ? "متاح" : "Available"} (${d.remaining})`;
-    el.appendChild(title);
-    el.appendChild(meta);
-    el.appendChild(pill);
-    el.addEventListener("click", () => {
-      if (d.full) {
-        toastShow(lang === "ar" ? "اليوم ده ممتلئ، اختار يوم تاني" : "This day is full. Pick another.");
-        return;
-      }
-      state.selectedISO = d.date;
-      renderSelectedText();
-      Array.from(daysWrap.children).forEach(c => c.classList.toggle("selected", c.dataset.iso === state.selectedISO));
-    });
-    daysWrap.appendChild(el);
-  });
-}
-function renderSelectedText(){
-  if (!state.selectedISO){
-    selectedDayText.textContent = (lang === "ar") ? "لم يتم اختيار يوم" : "No day selected";
-    return;
-  }
-  selectedDayText.textContent = (lang === "ar")
-    ? `اليوم المختار: ${formatDMY(state.selectedISO)}`
-    : `Selected: ${formatDMY(state.selectedISO)}`;
-}
+
+// ===== Fast lookup across ALL branches (JSONP) =====
 async function lookupAcrossBranches(phone){
-  const entries = Object.entries(BRANCH_API);
-  const tasks = entries.map(([branch, base]) =>
-    apiGet(base, { action:"lookup", phone })
-      .then(res => ({ branch, res }))
-  );
-  const settled = await Promise.allSettled(tasks);
-  for (const s of settled){
-    if (s.status !== "fulfilled") continue;
-    const { branch, res } = s.value;
-    if (res && res.ok && res.customer && res.customer.found && res.customer.customer){
-      return { ok:true, fromBranch: branch, customer: res.customer.customer };
-    }
-  }
-  return { ok:false };
-}
-function setCustomerUI(customer){
-  vName.textContent  = customer?.name || "—";
-  vModel.textContent = customer?.carModel || "—";
-  vColor.textContent = customer?.carColor || "—";
-  vYear.textContent  = customer?.carYear || "—";
-  vFilm.textContent  = customer?.filmType || "—";
-}
-const onPhoneInput = debounce(async () => {
-  const raw = phoneInput.value;
-  const p = normPhoneInput(raw);
-  phoneInput.value = p;
-  state.phone = p;
-  if (p.length < 11){
-    phoneHint.textContent = (lang === "ar") ? "اكتب رقم 11 رقم (01xxxxxxxxx)" : "Enter 11 digits (01xxxxxxxxx)";
-    lookupStatus.style.display = "none";
-    sourceBadge.style.display = "none";
-    setCustomerUI(null);
-    state.customer = null;
-    state.sourceBranch = null;
-    confirmBtn.disabled = true;
-    return;
-  }
-  if (!isValidEgyptPhone(p)){
-    phoneHint.textContent = (lang === "ar") ? "رقم غير صحيح" : "Invalid number";
-    lookupStatus.style.display = "none";
-    sourceBadge.style.display = "none";
-    setCustomerUI(null);
-    state.customer = null;
-    state.sourceBranch = null;
-    confirmBtn.disabled = true;
-    return;
-  }
-  phoneHint.textContent = (lang === "ar") ? "جاري البحث..." : "Searching...";
-  lookupStatus.style.display = "inline-flex";
-  lookupStatus.textContent = (lang === "ar") ? "جاري تحميل بيانات العميل..." : "Loading customer...";
-  confirmBtn.disabled = true;
-  try{
-    const r = await lookupAcrossBranches(p);
-    if (!r.ok){
-      setCustomerUI(null);
-      lookupStatus.textContent = (lang === "ar") ? "الرقم غير موجود — تواصل مع الفرع" : "Not found — contact branch";
-      sourceBadge.style.display = "none";
-      state.customer = null;
-      state.sourceBranch = null;
-      confirmBtn.disabled = true;
-      phoneHint.textContent = (lang === "ar") ? "لم يتم العثور على بيانات" : "No data found";
-      return;
-    }
-    state.customer = r.customer;
-    state.sourceBranch = r.fromBranch;
-    setCustomerUI(state.customer);
-    lookupStatus.textContent = (lang === "ar") ? "تم العثور على البيانات" : "Data found";
-    phoneHint.textContent = (lang === "ar") ? "جاهز للحجز" : "Ready";
-    sourceBadge.style.display = "inline-flex";
-    sourceBadgeText.textContent = (lang === "ar")
-      ? `البيانات من: ${arabBranchName(r.fromBranch)}`
-      : `Data from: ${r.fromBranch}`;
-    confirmBtn.disabled = false;
-  }catch(e){
-    setCustomerUI(null);
-    lookupStatus.textContent = (lang === "ar") ? "خطأ في البحث" : "Lookup error";
-    sourceBadge.style.display = "none";
-    state.customer = null;
-    state.sourceBranch = null;
-    confirmBtn.disabled = true;
-    phoneHint.textContent = (lang === "ar") ? "حاول مرة أخرى" : "Try again";
-  }
-}, LOOKUP_DEBOUNCE_MS);
-phoneInput.addEventListener("input", onPhoneInput);
-function arabBranchName(name){
-  if (name === "Nasr City") return "مدينة نصر";
-  if (name === "AUC") return "التجمع الخامس";
-  if (name === "Maadi") return "المعادي";
-  if (name === "Zayed") return "الشيخ زايد";
-  if (name === "October") return "٦ أكتوبر";
-  return name;
-}
-confirmBtn.addEventListener("click", async () => {
-  if (!state.customer || !isValidEgyptPhone(state.phone)){
-    toastShow(lang === "ar" ? "اكتب رقم صحيح أولاً" : "Enter a valid phone first");
-    return;
-  }
-  if (!state.selectedISO){
-    toastShow(lang === "ar" ? "اختار يوم الحجز" : "Pick a day");
-    return;
-  }
-  confirmBtn.disabled = true;
-  const branch = state.bookingBranch;
-  const base = BRANCH_API[branch];
-  try{
-    const j = await apiGet(base, {
-      action: "create",
-      phone: state.phone,
-      bookingDate: state.selectedISO,
-      notes: notesInput.value || "",
-      name: state.customer.name || "",
-      carModel: state.customer.carModel || "",
-      carColor: state.customer.carColor || "",
-      carYear: state.customer.carYear || "",
-      filmType: state.customer.filmType || ""
-    });
-    if (j && j.ok){
-      toastShow(lang === "ar"
-        ? `تم تأكيد الحجز ✅ (${formatDMY(state.selectedISO)})`
-        : `Booking confirmed ✅ (${formatDMY(state.selectedISO)})`
-      );
-      availabilityCache.delete(cacheKey(branch, state.startISO, AVAIL_DAYS));
-      await loadAvailabilityForSelectedBranch(false);
-      state.selectedISO = null;
-      renderSelectedText();
-      notesInput.value = "";
-    } else {
-      const msg = (j && j.message) ? String(j.message) : "ERROR";
-      if (msg === "FULL"){
-        toastShow(lang === "ar" ? "اليوم ده ممتلئ — اختار يوم تاني" : "Day is full — pick another");
-      } else {
-        toastShow(lang === "ar" ? `فشل إنشاء الحجز: ${msg}` : `Booking failed: ${msg}`);
+  const tasks = BRANCHES.map(async (b) => {
+    const api = BRANCH_API[b];
+    const url = api + "?action=lookup_jsonp&phone=" + encodeURIComponent(phone);
+    try {
+      const res = await jsonp(url, 12000);
+      if (res && res.ok && res.customer && res.customer.ok && res.customer.found) {
+        return { found: true, branch: b, customer: res.customer.customer };
       }
+      return { found: false };
+    } catch(e){
+      return { found: false };
     }
-  }catch(e){
-    toastShow(lang === "ar" ? "CLIENT_ERROR: Network/Timeout" : "CLIENT_ERROR: Network/Timeout");
-  }finally{
-    confirmBtn.disabled = false;
+  });
+
+  const results = await Promise.all(tasks);
+  const hit = results.find(x => x && x.found);
+  if (hit) return hit;
+
+  return { found: false };
+}
+
+function setCustomerUI(customer, sourceBranch){
+  customerPanel.classList.remove("hidden");
+
+  cName.textContent  = customer.name || "—";
+  cModel.textContent = customer.carModel || "—";
+  cColor.textContent = customer.carColor || "—";
+  cYear.textContent  = customer.carYear || "—";
+  cFilm.textContent  = customer.filmType || "—";
+
+  sourceBadgeText.textContent = (lang==="ar")
+    ? ("البيانات من: " + branchNameAr(sourceBranch))
+    : ("Source: " + sourceBranch);
+}
+
+function branchNameAr(b){
+  if (b==="Nasr City") return "مدينة نصر";
+  if (b==="AUC") return "التجمع الخامس";
+  if (b==="Maadi") return "المعادي";
+  if (b==="Zayed") return "الشيخ زايد";
+  if (b==="October") return "٦ أكتوبر";
+  return b;
+}
+
+searchBtn.addEventListener("click", async () => {
+  const phone = normPhoneLocal(phoneInput.value);
+  lookupMsg.className = "msg";
+  createMsg.textContent = "";
+  if (!phone) {
+    lookupMsg.className = "msg bad";
+    lookupMsg.textContent = (lang==="ar") ? "اكتب رقم موبايل صحيح" : "Enter a valid phone";
+    return;
+  }
+
+  lookupMsg.textContent = (lang==="ar") ? "جاري البحث..." : "Searching...";
+  customerPanel.classList.add("hidden");
+  customerCache = null;
+
+  const hit = await lookupAcrossBranches(phone);
+  if (!hit.found) {
+    lookupMsg.className = "msg bad";
+    lookupMsg.textContent = (lang==="ar") ? "الرقم غير موجود في البيانات" : "Customer not found";
+    return;
+  }
+
+  lookupMsg.className = "msg ok";
+  lookupMsg.textContent = (lang==="ar") ? "تم العثور على بيانات العميل" : "Customer found";
+  customerCache = { phone, ...hit.customer, sourceBranch: hit.branch };
+  setCustomerUI(hit.customer, hit.branch);
+});
+
+// ===== Calendar render =====
+function formatDMY(iso){
+  const [y,m,d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function renderCalendar(branch){
+  const av = availabilityCache[branch];
+  if (!av || !av.days) return;
+
+  calendar.innerHTML = "";
+  av.days.forEach(day => {
+    const div = document.createElement("div");
+    div.className = "day " + (day.full ? "full" : "ok");
+    div.dataset.iso = day.date;
+
+    div.innerHTML = `
+      <div class="d">${formatDMY(day.date)}</div>
+      <div class="s">${day.full ? (lang==="ar"?"ممتلئ":"Full") : ((lang==="ar"?"متاح":"Available") + ` (${day.remaining})`)}</div>
+    `;
+
+    if (!day.full) {
+      div.addEventListener("click", () => {
+        [...calendar.querySelectorAll(".day")].forEach(x => x.classList.remove("selected"));
+        div.classList.add("selected");
+        selectedDateISO = day.date;
+        createMsg.className = "msg";
+        createMsg.textContent = (lang==="ar") ? ("اليوم المختار: " + formatDMY(day.date)) : ("Selected: " + formatDMY(day.date));
+      });
+    }
+
+    calendar.appendChild(div);
+  });
+}
+
+// ===== Create booking =====
+createBtn.addEventListener("click", async () => {
+  createMsg.className = "msg";
+  if (!customerCache) {
+    createMsg.className = "msg bad";
+    createMsg.textContent = (lang==="ar") ? "ابحث عن العميل أولاً" : "Search customer first";
+    return;
+  }
+  if (!selectedDateISO) {
+    createMsg.className = "msg bad";
+    createMsg.textContent = (lang==="ar") ? "اختر يوم الحجز" : "Pick a booking day";
+    return;
+  }
+  const api = BRANCH_API[selectedBranch];
+  const url =
+    api +
+    "?action=create" +
+    "&phone=" + encodeURIComponent(customerCache.phone) +
+    "&bookingDate=" + encodeURIComponent(selectedDateISO) +
+    "&notes=" + encodeURIComponent(notesInput.value || "") +
+    "&name=" + encodeURIComponent(customerCache.name || "") +
+    "&carModel=" + encodeURIComponent(customerCache.carModel || "") +
+    "&carColor=" + encodeURIComponent(customerCache.carColor || "") +
+    "&carYear=" + encodeURIComponent(customerCache.carYear || "") +
+    "&filmType=" + encodeURIComponent(customerCache.filmType || "") +
+    "&_=" + Date.now();
+  createMsg.textContent = (lang==="ar") ? "جاري إنشاء الحجز..." : "Creating booking...";
+  try {
+    const res = await fetchJson(url);
+    if (!res || !res.ok) throw new Error(res && res.message ? res.message : "Create failed");
+    createMsg.className = "msg ok";
+    createMsg.textContent = (lang==="ar")
+      ? ("تم تأكيد الحجز. رقم: " + res.orderId)
+      : ("Booking confirmed. ID: " + res.orderId);
+    await preloadBranchAvailability(selectedBranch);
+    renderCalendar(selectedBranch);
+    selectedDateISO = "";
+    notesInput.value = "";
+  } catch (err) {
+    createMsg.className = "msg bad";
+    createMsg.textContent = (lang==="ar") ? ("فشل إنشاء الحجز: " + err.message) : ("Booking failed: " + err.message);
   }
 });
 (async function init(){
-  setLang(lang);
-  initBranches();
-  phoneHint.textContent = (lang === "ar") ? "اكتب رقم 11 رقم (01xxxxxxxxx)" : "Enter 11 digits (01xxxxxxxxx)";
-  confirmBtn.disabled = true;
-  await pingAllBranches();
-  minRuleText.textContent = (lang === "ar")
-    ? `الحجز يبدأ من تاريخ ${formatDMY(state.minDateISO)} (بعد ${daysDiff(todayISO(), state.minDateISO)} يوم).`
-    : `Booking starts from ${formatDMY(state.minDateISO)} (in ${daysDiff(todayISO(), state.minDateISO)} days).`;
-  preloadAllAvailability().catch(() => {});
-  await loadAvailabilityForSelectedBranch(false);
+  setLang("en");
+  await preloadBranchAvailability(selectedBranch);
+  renderCalendar(selectedBranch);
 })();
