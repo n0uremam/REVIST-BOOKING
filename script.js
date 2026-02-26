@@ -419,6 +419,9 @@ function ensureSuccessModal_(){
       border-radius:18px;
       box-shadow:0 30px 90px rgba(0,0,0,.7);
       padding:14px;
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .sm-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
     .sm-title{display:flex;align-items:center;gap:10px;font-weight:900}
@@ -670,3 +673,4 @@ createBtn.addEventListener("click", async () => {
   await preloadBranchAvailability(selectedBranch);
   renderCalendar(selectedBranch);
 })();
+
