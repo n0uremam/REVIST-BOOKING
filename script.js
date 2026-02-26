@@ -14,7 +14,7 @@ const BRANCH_API = {
 const BRANCHES = Object.keys(BRANCH_API);
 
 // ===== Tuning (speed) =====
-const AVAIL_DAYS = 30;
+const AVAIL_DAYS = 7;
 const LOOKUP_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 9000; // aim for < 1 sec on cache, few sec on network
 
@@ -55,7 +55,7 @@ function fmtDateUI(iso){ return String(iso || ""); }
 // ===== Branch info (edit if needed) =====
 const BRANCH_INFO = {
   "Nasr City": { ar:"مدينة نصر", en:"Nasr City", addr_ar:"خلف مول السراج", addr_en:"Behind El Serag Mall", map:"https://maps.app.goo.gl/g3zhYzNELks3YXa29" },
-  "AUC": { ar:"التجمع الخامس", en:"AUC", addr_ar:"شارع التسعين الجنوبي، مول الجامعة الأمريكية", addr_en:"South 90th Street, AUC Mall", map:"https://maps.app.goo.gl/ukuJkYmuQbeNfH4H7" },
+  "AUC": { ar:"التجمع الخامس", en:"The 5th Settlement", addr_ar:"شارع التسعين الجنوبي، مول الجامعة الأمريكية", addr_en:"South 90th Street, AUC Mall", map:"https://maps.app.goo.gl/ukuJkYmuQbeNfH4H7" },
   "Maadi": { ar:"المعادي", en:"Maadi", addr_ar:"محور حسب الله الكفراوي", addr_en:"Hassab Allah Kafrawy Axis", map:"https://maps.app.goo.gl/szmagQ9WdrUYetkM7" },
   "Zayed": { ar:"الشيخ زايد", en:"Sheikh Zayed", addr_ar:"وصلة دهشور، جميرا G21", addr_en:"Dahshur Link, Jumeirah G21", map:"https://maps.app.goo.gl/aDiZxX6Nte39SyQb8" },
   "October": { ar:"٦ أكتوبر", en:"6th of October", addr_ar:"المحور المركزي، شارع الخزان الأول", addr_en:"Central Axis, First Al-Khazan Street", map:"https://maps.app.goo.gl/mso2BCnqRNYPLMhU6" },
@@ -673,4 +673,5 @@ createBtn.addEventListener("click", async () => {
   await preloadBranchAvailability(selectedBranch);
   renderCalendar(selectedBranch);
 })();
+
 
