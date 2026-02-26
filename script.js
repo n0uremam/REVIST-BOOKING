@@ -2,6 +2,7 @@
 // Abdo El Amir — Revisit Booking (Samsung-safe)
 // - No JSONP (uses Netlify proxy) => fixes Samsung JSONP network error
 // - Fast lookup: cache + selected branch first + early success
+// - Weekly calendar with arrows (prev/next week)
 // ============================================
 
 const BRANCH_API = {
@@ -14,16 +15,21 @@ const BRANCH_API = {
 const BRANCHES = Object.keys(BRANCH_API);
 
 // ===== Tuning (speed) =====
-const AVAIL_DAYS = 7;
+const AVAIL_DAYS = 7; // WEEK VIEW
 const LOOKUP_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const FETCH_TIMEOUT_MS = 9000; // aim for < 1 sec on cache, few sec on network
+const AVAIL_CACHE_TTL_MS  = 3 * 60 * 1000;        // 3 minutes per branch/week
+const FETCH_TIMEOUT_MS = 9000;
 
 // ===== UI state =====
 let lang = "en";
 let selectedBranch = BRANCHES[0];
 let selectedDateISO = "";
 let customerCache = null;
+
+// Availability cache by (branch|startISO) => {t, availability}
 let availabilityCache = {};
+let minDateByBranch = {}; // branch => minDateISO
+let weekStartISO = "";    // current week start (minDate adjusted)
 
 // ===== DOM =====
 const phoneInput = document.getElementById("phoneInput");
@@ -41,14 +47,18 @@ const sourceBadgeText = document.getElementById("sourceBadgeText");
 const branchSelect = document.getElementById("branchSelect");
 const minDateText = document.getElementById("minDateText");
 const availMsg = document.getElementById("availMsg");
-
 const calendar = document.getElementById("calendar");
+
 const notesInput = document.getElementById("notesInput");
 const createBtn = document.getElementById("createBtn");
 const createMsg = document.getElementById("createMsg");
 
 const toggleBtn = document.getElementById("langToggle");
 const trans = document.querySelectorAll("[data-en]");
+
+// Week arrows (icons)
+const weekPrevBtn = document.getElementById("weekPrev");
+const weekNextBtn = document.getElementById("weekNext");
 
 function fmtDateUI(iso){ return String(iso || ""); }
 
@@ -96,6 +106,34 @@ function isoTodayPlus(n){
   return `${y}-${m}-${d}`;
 }
 
+function addDaysISO(iso, days){
+  const [y,m,d] = iso.split("-").map(Number);
+  const dt = new Date(y, m-1, d);
+  dt.setDate(dt.getDate() + days);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth()+1).padStart(2,"0");
+  const dd = String(dt.getDate()).padStart(2,"0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function compareISO(a,b){ return String(a).localeCompare(String(b)); }
+
+function weekKey(branch, startISO){
+  return `AV_${branch}_${startISO}`;
+}
+
+function getAvailFromCache(branch, startISO){
+  const k = weekKey(branch, startISO);
+  const obj = availabilityCache[k];
+  if (!obj) return null;
+  if ((Date.now() - obj.t) > AVAIL_CACHE_TTL_MS) return null;
+  return obj.av;
+}
+
+function setAvailCache(branch, startISO, av){
+  availabilityCache[weekKey(branch,startISO)] = { t: Date.now(), av };
+}
+
 // ===== Language toggle =====
 function setLang(newLang){
   lang = newLang;
@@ -104,7 +142,8 @@ function setLang(newLang){
   trans.forEach(el => el.textContent = el.dataset[lang]);
   toggleBtn.textContent = lang === "en" ? "AR" : "EN";
   initBranches();
-  if (availabilityCache[selectedBranch]) renderCalendar(selectedBranch);
+  // re-render current week quickly
+  if (weekStartISO) renderCalendar(selectedBranch, weekStartISO);
 }
 toggleBtn.addEventListener("click", () => setLang(lang === "en" ? "ar" : "en"));
 
@@ -125,44 +164,92 @@ branchSelect.addEventListener("change", async () => {
   selectedBranch = branchSelect.value;
   selectedDateISO = "";
   createMsg.textContent = "";
-  await preloadBranchAvailability(selectedBranch);
-  renderCalendar(selectedBranch);
+  await ensureMinDateForBranch(selectedBranch);
+  // reset to first week (minDate week)
+  weekStartISO = minDateByBranch[selectedBranch] || isoTodayPlus(12);
+  await preloadWeekAvailability(selectedBranch, weekStartISO);
+  renderCalendar(selectedBranch, weekStartISO);
+  // prefetch next week in background
+  prefetchNeighborWeeks_(selectedBranch, weekStartISO);
 });
 
-// ===== Availability (NO JSONP) =====
-async function preloadBranchAvailability(branch){
+// ===== MinDate (fast ping) =====
+async function ensureMinDateForBranch(branch){
+  if (minDateByBranch[branch]) return minDateByBranch[branch];
+
+  const api = BRANCH_API[branch];
+  try {
+    const ping = await fetchJsonWithTimeout(proxyUrl(api + "?action=ping"), 9000);
+    const minDate = ping.minDate || isoTodayPlus(12);
+    minDateByBranch[branch] = minDate;
+    return minDate;
+  } catch {
+    const minDate = isoTodayPlus(12);
+    minDateByBranch[branch] = minDate;
+    return minDate;
+  }
+}
+
+function updateMinDateUI_(minDate){
+  minDateText.textContent = (lang==="ar")
+    ? `الحجز يبدأ من تاريخ ${fmtDateUI(minDate)}`
+    : `Booking starts from ${fmtDateUI(minDate)}`;
+}
+
+// ===== Availability (weekly) =====
+async function preloadWeekAvailability(branch, startISO){
   availMsg.className = "msg";
   availMsg.textContent = (lang==="ar") ? "جاري تحميل المواعيد..." : "Loading availability...";
+
+  const minDate = await ensureMinDateForBranch(branch);
+  updateMinDateUI_(minDate);
+
+  // Week start cannot be earlier than minDate
+  let safeStart = startISO;
+  if (compareISO(safeStart, minDate) < 0) safeStart = minDate;
+
+  // Use cache if fresh
+  const cached = getAvailFromCache(branch, safeStart);
+  if (cached && cached.days) {
+    availMsg.className = "msg ok";
+    availMsg.textContent = (lang==="ar") ? "تم تحميل المواعيد" : "Availability loaded";
+    return cached;
+  }
 
   const api = BRANCH_API[branch];
 
   try {
-    const ping = await fetchJsonWithTimeout(proxyUrl(api + "?action=ping"), 9000);
-    const minDate = ping.minDate || isoTodayPlus(12);
-
-    minDateText.textContent = (lang==="ar")
-      ? `الحجز يبدأ من تاريخ ${fmtDateUI(minDate)}`
-      : `Booking starts from ${fmtDateUI(minDate)}`;
-
     const av = await fetchJsonWithTimeout(
-      proxyUrl(api + `?action=availability&start=${encodeURIComponent(minDate)}&days=${encodeURIComponent(AVAIL_DAYS)}`),
+      proxyUrl(api + `?action=availability&start=${encodeURIComponent(safeStart)}&days=${encodeURIComponent(AVAIL_DAYS)}`),
       12000
     );
 
     if (!av || !av.ok || !av.availability || !av.availability.days) throw new Error("Bad availability response");
 
-    availabilityCache[branch] = av.availability;
+    setAvailCache(branch, safeStart, av.availability);
+
     availMsg.className = "msg ok";
     availMsg.textContent = (lang==="ar") ? "تم تحميل المواعيد" : "Availability loaded";
 
+    return av.availability;
+
   } catch (e) {
-    availabilityCache[branch] = null;
     calendar.innerHTML = "";
     availMsg.className = "msg bad";
     availMsg.textContent = (lang==="ar")
       ? ("فشل تحميل المواعيد: " + (e?.message || e))
       : ("Availability error: " + (e?.message || e));
+    return null;
   }
+}
+
+function prefetchNeighborWeeks_(branch, startISO){
+  // Prefetch next week (and prev if valid) silently
+  const next = addDaysISO(startISO, 7);
+  preloadWeekAvailability(branch, next).catch(()=>{});
+  const minDate = minDateByBranch[branch] || isoTodayPlus(12);
+  const prev = addDaysISO(startISO, -7);
+  if (compareISO(prev, minDate) >= 0) preloadWeekAvailability(branch, prev).catch(()=>{});
 }
 
 // ===== Ultra-fast lookup (cache + staged) =====
@@ -209,13 +296,13 @@ async function lookupBranch(phone, branch){
 }
 
 async function lookupFast(phone){
-  // 1) Selected branch first (fast path)
+  // 1) Selected branch first
   try {
     const first = await lookupBranch(phone, selectedBranch);
     if (first.found) return first;
   } catch {}
 
-  // 2) Early success parallel (resolve on first found)
+  // 2) Early success parallel
   const others = BRANCHES.filter(b => b !== selectedBranch);
   return await new Promise((resolve) => {
     let done = false;
@@ -244,7 +331,7 @@ searchBtn.addEventListener("click", async () => {
     return;
   }
 
-  // 0) Instant cache => typically < 1 second
+  // Instant cache
   const cached = loadCache(phone);
   if (cached && cached.customer && cached.sourceBranch) {
     customerCache = { phone, ...cached.customer, sourceBranch: cached.sourceBranch };
@@ -252,7 +339,7 @@ searchBtn.addEventListener("click", async () => {
     lookupMsg.className = "msg ok";
     lookupMsg.textContent = (lang==="ar") ? "تم تحميل البيانات فورًا" : "Loaded instantly";
 
-    // background refresh (silent)
+    // background refresh
     lookupFast(phone).then(hit=>{
       if (hit && hit.found) {
         customerCache = { phone, ...hit.customer, sourceBranch: hit.branch };
@@ -263,7 +350,6 @@ searchBtn.addEventListener("click", async () => {
     return;
   }
 
-  // Show searching
   lookupMsg.textContent = (lang==="ar") ? "جاري البحث..." : "Searching...";
   customerPanel.classList.add("hidden");
   customerCache = null;
@@ -283,10 +369,24 @@ searchBtn.addEventListener("click", async () => {
   lookupMsg.textContent = (lang==="ar") ? "تم العثور على بيانات العميل" : "Customer found";
 });
 
-// ===== Calendar render =====
-function renderCalendar(branch){
-  const av = availabilityCache[branch];
+// ===== Calendar render (week) =====
+async function renderCalendar(branch, startISO){
+  const minDate = await ensureMinDateForBranch(branch);
+  updateMinDateUI_(minDate);
+
+  let safeStart = startISO || minDate;
+  if (compareISO(safeStart, minDate) < 0) safeStart = minDate;
+  weekStartISO = safeStart;
+
+  const av = await preloadWeekAvailability(branch, safeStart);
   if (!av || !av.days) return;
+
+  // enable/disable prev button based on minDate
+  if (weekPrevBtn) {
+    const prev = addDaysISO(safeStart, -7);
+    weekPrevBtn.disabled = (compareISO(prev, minDate) < 0);
+    weekPrevBtn.style.opacity = weekPrevBtn.disabled ? "0.45" : "1";
+  }
 
   calendar.innerHTML = "";
   av.days.forEach(day => {
@@ -317,6 +417,29 @@ function renderCalendar(branch){
     }
     calendar.appendChild(div);
   });
+
+  // prefetch next week in background for instant arrow click
+  prefetchNeighborWeeks_(branch, safeStart);
+}
+
+// Week arrows
+if (weekPrevBtn) {
+  weekPrevBtn.addEventListener("click", async () => {
+    if (!weekStartISO) return;
+    const minDate = await ensureMinDateForBranch(selectedBranch);
+    const prev = addDaysISO(weekStartISO, -7);
+    if (compareISO(prev, minDate) < 0) return;
+    selectedDateISO = "";
+    await renderCalendar(selectedBranch, prev);
+  });
+}
+if (weekNextBtn) {
+  weekNextBtn.addEventListener("click", async () => {
+    if (!weekStartISO) return;
+    const next = addDaysISO(weekStartISO, 7);
+    selectedDateISO = "";
+    await renderCalendar(selectedBranch, next);
+  });
 }
 
 /* =========================================
@@ -327,6 +450,7 @@ function qrUrl_(text){
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${data}`;
 }
 
+// (Success Modal functions unchanged from your version)
 function ensureSuccessModal_(){
   let modal = document.getElementById("successModal");
   if (modal) return modal;
@@ -429,92 +553,33 @@ function ensureSuccessModal_(){
     .sm-x{background:transparent;border:1px solid rgba(255,255,255,.10);color:#fff;border-radius:12px;padding:8px 10px;cursor:pointer}
     .sm-x:hover{border-color:rgba(201,162,77,.25);transform:translateY(-1px)}
     .sm-body{padding:6px 6px 2px}
-
     .sm-top{display:grid;grid-template-columns:1.3fr .7fr;gap:12px;align-items:stretch;margin-bottom:12px}
-    .sm-id{
-      border:1px solid rgba(255,255,255,.08);
-      background:rgba(255,255,255,.03);
-      border-radius:16px;
-      padding:12px;
-    }
+    .sm-id{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:16px;padding:12px}
     .sm-id span{color:var(--muted);font-weight:900}
     .sm-id-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
     .sm-id-row b{font-size:1.05rem}
     .sm-mini{margin-top:8px;color:var(--muted);font-weight:900}
-
-    .sm-copy{
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(255,255,255,.06);
-      color:#fff;border-radius:14px;
-      padding:10px 12px;font-weight:900;cursor:pointer;
-      display:inline-flex;gap:10px;align-items:center;
-      transition:.2s ease;
-      white-space:nowrap;
-    }
+    .sm-copy{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;border-radius:14px;padding:10px 12px;font-weight:900;cursor:pointer;display:inline-flex;gap:10px;align-items:center;transition:.2s ease;white-space:nowrap}
     .sm-copy:hover{transform:translateY(-1px);border-color:rgba(201,162,77,.25)}
-
-    .sm-qr{
-      border:1px solid rgba(255,255,255,.08);
-      background:rgba(255,255,255,.03);
-      border-radius:16px;
-      padding:10px;
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:8px;
-    }
+    .sm-qr{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:16px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
     .sm-qr img{width:200px;height:200px;border-radius:14px;background:#fff}
     .sm-qr-cap{color:var(--muted);font-weight:900}
-
     .sm-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .sm-line{
-      display:flex;justify-content:space-between;gap:12px;
-      padding:10px 10px;border:1px solid rgba(255,255,255,.07);
-      background:rgba(255,255,255,.03);border-radius:14px;
-    }
+    .sm-line{display:flex;justify-content:space-between;gap:12px;padding:10px 10px;border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.03);border-radius:14px}
     .sm-line span{color:var(--muted);font-weight:900}
     .sm-line b{font-weight:900}
-
-    .sm-loc{
-      margin-top:12px;
-      border:1px solid rgba(255,255,255,.08);
-      background:rgba(255,255,255,.03);
-      border-radius:16px;
-      padding:12px;
-    }
+    .sm-loc{margin-top:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:16px;padding:12px}
     .sm-loc-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
     .sm-loc-head i{color:var(--gold)}
     .sm-loc-body{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-    .sm-map-btn{
-      text-decoration:none;
-      display:inline-flex;align-items:center;gap:10px;
-      padding:10px 12px;border-radius:14px;
-      border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.06);
-      color:#fff;font-weight:900;
-      transition:.2s ease;
-    }
+    .sm-map-btn{text-decoration:none;display:inline-flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:#fff;font-weight:900;transition:.2s ease}
     .sm-map-btn:hover{transform:translateY(-1px);border-color:rgba(201,162,77,.25)}
-
-    .sm-inst{
-      margin-top:12px;
-      display:flex;gap:10px;align-items:flex-start;
-      padding:12px;border-radius:16px;
-      background:rgba(201,162,77,.10);
-      border:1px solid rgba(201,162,77,.22);
-      color:var(--gold);
-      font-weight:900;
-      line-height:1.7;
-    }
+    .sm-inst{margin-top:12px;display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:16px;background:rgba(201,162,77,.10);border:1px solid rgba(201,162,77,.22);color:var(--gold);font-weight:900;line-height:1.7}
     .sm-inst i{margin-top:2px}
-
     .sm-actions{display:flex;justify-content:flex-end;margin-top:12px}
-    .sm-btn{
-      border:none;cursor:pointer;border-radius:14px;
-      padding:12px 14px;font-weight:900;display:inline-flex;gap:10px;align-items:center;
-      transition:.2s ease;
-    }
+    .sm-btn{border:none;cursor:pointer;border-radius:14px;padding:12px 14px;font-weight:900;display:inline-flex;gap:10px;align-items:center;transition:.2s ease}
     .sm-ok{background:var(--gold);color:#000}
     .sm-ok:hover{transform:translateY(-1px);box-shadow:0 12px 30px rgba(201,162,77,.22)}
-
     @media(max-width:820px){
       .sm-top{grid-template-columns:1fr}
       .sm-grid{grid-template-columns:1fr}
@@ -522,7 +587,6 @@ function ensureSuccessModal_(){
     }
   `;
   document.head.appendChild(style);
-
   return modal;
 }
 
@@ -539,7 +603,6 @@ function openSuccessModal_(data){
   const instruction_en = `You can visit ${bi.en || data.branch} branch from 10:00 AM to 1:00 PM. Please leave the car there, and our Operation team will receive it and handle everything end-to-end.`;
   const instr = isAr ? instruction_ar : instruction_en;
 
-  // labels
   document.getElementById("smTitle").textContent = isAr ? "تم تأكيد الحجز" : "Booking Confirmed";
   document.getElementById("smIdLabel").textContent = isAr ? "رقم الحجز" : "Booking ID";
   document.getElementById("smCopyText").textContent = isAr ? "نسخ" : "Copy";
@@ -554,7 +617,6 @@ function openSuccessModal_(data){
   document.getElementById("smOkText").textContent = isAr ? "تم" : "Done";
   document.getElementById("smQrCap").textContent = isAr ? "امسح الكود" : "Scan QR";
 
-  // values
   document.getElementById("smIdValue").textContent = data.orderId || "—";
   document.getElementById("smMini").textContent = isAr
     ? `الفرع: ${branchLabel} • التاريخ: ${fmtDateUI(data.dateISO)}`
@@ -569,7 +631,6 @@ function openSuccessModal_(data){
 
   document.getElementById("smLocAddr").textContent = addr;
   document.getElementById("smLocMap").href = mapUrl;
-
   document.getElementById("smInstText").textContent = instr;
 
   const qrText = `Abdo El Amir Booking\nID: ${data.orderId}\nBranch: ${branchLabel}\nDate: ${fmtDateUI(data.dateISO)}\nPhone: ${data.phone || ""}`;
@@ -652,15 +713,18 @@ createBtn.addEventListener("click", async () => {
       notes: notesInput.value || ""
     });
 
-    await preloadBranchAvailability(selectedBranch);
-    renderCalendar(selectedBranch);
+    // refresh current week counts fast
+    await preloadWeekAvailability(selectedBranch, weekStartISO);
+    await renderCalendar(selectedBranch, weekStartISO);
 
     selectedDateISO = "";
     notesInput.value = "";
 
   } catch (e) {
     createMsg.className = "msg bad";
-    createMsg.textContent = (lang==="ar") ? ("فشل إنشاء الحجز: " + (e?.message || e)) : ("Booking failed: " + (e?.message || e));
+    createMsg.textContent = (lang==="ar")
+      ? ("فشل إنشاء الحجز: " + (e?.message || e))
+      : ("Booking failed: " + (e?.message || e));
   } finally {
     createBtn.disabled = false;
     createBtn.style.opacity = "1";
@@ -670,8 +734,8 @@ createBtn.addEventListener("click", async () => {
 // ===== Init =====
 (async function init(){
   setLang("en");
-  await preloadBranchAvailability(selectedBranch);
-  renderCalendar(selectedBranch);
+  await ensureMinDateForBranch(selectedBranch);
+  weekStartISO = minDateByBranch[selectedBranch] || isoTodayPlus(12);
+  await preloadWeekAvailability(selectedBranch, weekStartISO);
+  await renderCalendar(selectedBranch, weekStartISO);
 })();
-
-
