@@ -1,11 +1,9 @@
 // ============================================
-// Abdo El Amir — Revisit Booking (Netlify-safe)
-// - Faster lookup (cache + staged search)
-// - Availability preload (JSONP + retries)
-// - Success widget AFTER booking: QR + branch instructions + location (AR/EN)
+// Abdo El Amir — Revisit Booking (Samsung-safe)
+// - No JSONP (uses Netlify proxy) => fixes Samsung JSONP network error
+// - Fast lookup: cache + selected branch first + early success
 // ============================================
 
-// ===== Branch WebApp URLs (your provided) =====
 const BRANCH_API = {
   "Nasr City": "https://script.google.com/macros/s/AKfycbxwal_GJHeIhqhbFojUyt6a2yI8MKtwS0tg-YoPavgPF1rluPmzIElk9on9Uoxi1lpcDg/exec",
   "AUC": "https://script.google.com/macros/s/AKfycbwibhM0RPkWsKkUJQ9My0ycfHhS9oo6PoEZ5sWlZByB8sT7n-QLMVqUsIYU4BoR59Lr4A/exec",
@@ -13,83 +11,19 @@ const BRANCH_API = {
   "Zayed": "https://script.google.com/macros/s/AKfycbymxUsSnwd7zYejyhiwuzuafJ9pfIzYqDTpOc9WIR-I3pMCMuJZ4a5XqPlyYmYTzmtv/exec",
   "October": "https://script.google.com/macros/s/AKfycbySjCDtGsHh94ukD1XpHVWwiqXc7kzdQoAVEQyCnf66cI6-NhIYbnLWnYNK63XmWLiaqQ/exec",
 };
-
 const BRANCHES = Object.keys(BRANCH_API);
 
-// ===== Branch info for Confirmation Widget (AR/EN) =====
-// ✳️ عدّل العناوين/اللوكيشن/المواعيد حسب الواقع عندك
-const BRANCH_INFO = {
-  "Nasr City": {
-    name_ar: "مدينة نصر",
-    name_en: "Nasr City",
-    address_ar: "خلف مول السراج",
-    address_en: "Behind El Serag Mall",
-    map: "https://maps.app.goo.gl/g3zhYzNELks3YXa29",
-    hours_ar: "10 صباحًا إلى 1 ظهرًا",
-    hours_en: "10:00 AM to 1:00 PM",
-    instruction_ar: "تقدر تزور فرع مدينة نصر من الساعة 10 صباحًا إلى 1 ظهرًا. حضرتك بس تسيب العربية هناك، وفريق الـ Operation هيستلمها ويتابع كل حاجة ويهتم بيها بالكامل.",
-    instruction_en: "You can visit Nasr City branch from 10:00 AM to 1:00 PM. Please leave the car there, and our Operation team will receive it and handle everything end-to-end."
-  },
-  "AUC": {
-    name_ar: "التجمع الخامس",
-    name_en: "AUC",
-    address_ar: "شارع التسعين الجنوبي، مول الجامعة الأمريكية",
-    address_en: "South 90th Street, AUC Mall",
-    map: "https://maps.app.goo.gl/ukuJkYmuQbeNfH4H7",
-    hours_ar: "10 صباحًا إلى 1 ظهرًا",
-    hours_en: "10:00 AM to 1:00 PM",
-    instruction_ar: "تقدر تزور فرع التجمع الخامس من الساعة 10 صباحًا إلى 1 ظهرًا. حضرتك بس تسيب العربية هناك، وفريق الـ Operation هيستلمها ويتابع كل حاجة ويهتم بيها بالكامل.",
-    instruction_en: "You can visit AUC branch from 10:00 AM to 1:00 PM. Please leave the car there, and our Operation team will receive it and handle everything end-to-end."
-  },
-  "Maadi": {
-    name_ar: "المعادي",
-    name_en: "Maadi",
-    address_ar: "محور حسب الله الكفراوي",
-    address_en: "Hassab Allah Kafrawy Axis",
-    map: "https://maps.app.goo.gl/szmagQ9WdrUYetkM7",
-    hours_ar: "10 صباحًا إلى 1 ظهرًا",
-    hours_en: "10:00 AM to 1:00 PM",
-    instruction_ar: "تقدر تزور فرع المعادي من الساعة 10 صباحًا إلى 1 ظهرًا. حضرتك بس تسيب العربية هناك، وفريق الـ Operation هيستلمها ويتابع كل حاجة ويهتم بيها بالكامل.",
-    instruction_en: "You can visit Maadi branch from 10:00 AM to 1:00 PM. Please leave the car there, and our Operation team will receive it and handle everything end-to-end."
-  },
-  "Zayed": {
-    name_ar: "الشيخ زايد",
-    name_en: "Sheikh Zayed",
-    address_ar: "وصلة دهشور، جميرا G21",
-    address_en: "Dahshur Link, Jumeirah G21",
-    map: "https://maps.app.goo.gl/aDiZxX6Nte39SyQb8",
-    hours_ar: "10 صباحًا إلى 1 ظهرًا",
-    hours_en: "10:00 AM to 1:00 PM",
-    instruction_ar: "تقدر تزور فرع شيخ زايد من الساعة 10 صباحًا إلى 1 ظهرًا. حضرتك بس تسيب العربية هناك، وفريق الـ Operation هيستلمها ويتابع كل حاجة ويهتم بيها بالكامل.",
-    instruction_en: "You can visit Sheikh Zayed branch from 10:00 AM to 1:00 PM. Please leave the car there, and our Operation team will receive it and handle everything end-to-end."
-  },
-  "October": {
-    name_ar: "٦ أكتوبر",
-    name_en: "6th of October",
-    address_ar: "المحور المركزي، شارع الخزان الأول",
-    address_en: "Central Axis, First Al-Khazan Street",
-    map: "https://maps.app.goo.gl/mso2BCnqRNYPLMhU6",
-    hours_ar: "10 صباحًا إلى 1 ظهرًا",
-    hours_en: "10:00 AM to 1:00 PM",
-    instruction_ar: "تقدر تزور فرع ٦ أكتوبر من الساعة 10 صباحًا إلى 1 ظهرًا. حضرتك بس تسيب العربية هناك، وفريق الـ Operation هيستلمها ويتابع كل حاجة ويهتم بيها بالكامل.",
-    instruction_en: "You can visit 6th of October branch from 10:00 AM to 1:00 PM. Please leave the car there, and our Operation team will receive it and handle everything end-to-end."
-  },
-};
-
-// ===== Performance tuning =====
+// ===== Tuning (speed) =====
 const AVAIL_DAYS = 30;
-const JSONP_TIMEOUT_MS = 16000;      // phones with slow networks
-const JSONP_RETRIES = 2;             // retry on some devices
-const LOOKUP_TIMEOUT_MS = 12000;
 const LOOKUP_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const FETCH_TIMEOUT_MS = 9000; // aim for < 1 sec on cache, few sec on network
 
-// ===== UI State =====
+// ===== UI state =====
 let lang = "en";
-let selectedDateISO = "";
 let selectedBranch = BRANCHES[0];
-
-let customerCache = null;       // { phone, name, carModel, carColor, carYear, filmType, sourceBranch }
-let availabilityCache = {};     // branch -> availability object
+let selectedDateISO = "";
+let customerCache = null;
+let availabilityCache = {};
 
 // ===== DOM =====
 const phoneInput = document.getElementById("phoneInput");
@@ -116,79 +50,34 @@ const createMsg = document.getElementById("createMsg");
 const toggleBtn = document.getElementById("langToggle");
 const trans = document.querySelectorAll("[data-en]");
 
-// ===== Date Display (UI wants ISO) =====
-function fmtDateUI(iso) { return String(iso || ""); }
+function fmtDateUI(iso){ return String(iso || ""); }
 
-// ===== Language =====
-function branchNameAr(b){
-  return (BRANCH_INFO[b] && BRANCH_INFO[b].name_ar) ? BRANCH_INFO[b].name_ar : b;
-}
-function branchNameEn(b){
-  return (BRANCH_INFO[b] && BRANCH_INFO[b].name_en) ? BRANCH_INFO[b].name_en : b;
-}
+// ===== Branch info (edit if needed) =====
+const BRANCH_INFO = {
+  "Nasr City": { ar:"مدينة نصر", en:"Nasr City", addr_ar:"خلف مول السراج", addr_en:"Behind El Serag Mall", map:"https://maps.app.goo.gl/g3zhYzNELks3YXa29" },
+  "AUC": { ar:"التجمع الخامس", en:"AUC", addr_ar:"شارع التسعين الجنوبي، مول الجامعة الأمريكية", addr_en:"South 90th Street, AUC Mall", map:"https://maps.app.goo.gl/ukuJkYmuQbeNfH4H7" },
+  "Maadi": { ar:"المعادي", en:"Maadi", addr_ar:"محور حسب الله الكفراوي", addr_en:"Hassab Allah Kafrawy Axis", map:"https://maps.app.goo.gl/szmagQ9WdrUYetkM7" },
+  "Zayed": { ar:"الشيخ زايد", en:"Sheikh Zayed", addr_ar:"وصلة دهشور، جميرا G21", addr_en:"Dahshur Link, Jumeirah G21", map:"https://maps.app.goo.gl/aDiZxX6Nte39SyQb8" },
+  "October": { ar:"٦ أكتوبر", en:"6th of October", addr_ar:"المحور المركزي، شارع الخزان الأول", addr_en:"Central Axis, First Al-Khazan Street", map:"https://maps.app.goo.gl/mso2BCnqRNYPLMhU6" },
+};
 
-function setLang(newLang){
-  lang = newLang;
-  document.documentElement.lang = lang;
-  document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
-  trans.forEach(el => el.textContent = el.dataset[lang]);
-  toggleBtn.textContent = lang === "en" ? "AR" : "EN";
-  initBranches();
-  if (availabilityCache[selectedBranch]) renderCalendar(selectedBranch);
-}
-toggleBtn.addEventListener("click", () => setLang(lang === "en" ? "ar" : "en"));
+function branchName(b){ return lang==="ar" ? (BRANCH_INFO[b]?.ar || b) : (BRANCH_INFO[b]?.en || b); }
 
-// ===== JSONP helper (Netlify-safe) =====
-function jsonp(url, timeoutMs = JSONP_TIMEOUT_MS) {
-  return new Promise((resolve, reject) => {
-    const cbName = "cb_" + Math.random().toString(36).slice(2);
-    const script = document.createElement("script");
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error("JSONP timeout"));
-    }, timeoutMs);
-
-    function cleanup() {
-      clearTimeout(timer);
-      if (script.parentNode) script.parentNode.removeChild(script);
-      try { delete window[cbName]; } catch (e) { window[cbName] = undefined; }
-    }
-
-    window[cbName] = (data) => {
-      cleanup();
-      resolve(data);
-    };
-
-    script.onerror = () => {
-      cleanup();
-      reject(new Error("JSONP network error"));
-    };
-
-    const sep = url.includes("?") ? "&" : "?";
-    script.src = url + sep + "callback=" + encodeURIComponent(cbName) + "&_=" + Date.now();
-    document.body.appendChild(script);
-  });
+// ===== Proxy fetch =====
+function proxyUrl(appscriptUrl) {
+  return "/.netlify/functions/gs?url=" + encodeURIComponent(appscriptUrl);
 }
 
-async function jsonpWithRetry(url, retries = JSONP_RETRIES, timeoutMs = JSONP_TIMEOUT_MS) {
-  let lastErr = null;
-  for (let i = 0; i <= retries; i++) {
-    try {
-      return await jsonp(url, timeoutMs);
-    } catch (e) {
-      lastErr = e;
-      // small backoff
-      await new Promise(r => setTimeout(r, 350 + i * 450));
-    }
+async function fetchJsonWithTimeout(url, timeoutMs = FETCH_TIMEOUT_MS) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { method:"GET", cache:"no-store", signal: ctrl.signal });
+    const txt = await r.text();
+    return JSON.parse(txt);
+  } finally {
+    clearTimeout(t);
   }
-  throw lastErr || new Error("JSONP failed");
-}
-
-// ===== Fetch JSON (create) =====
-async function fetchJson(url) {
-  const r = await fetch(url, { method: "GET", cache: "no-store" });
-  const txt = await r.text();
-  try { return JSON.parse(txt); } catch(e) { throw new Error("Non-JSON response"); }
 }
 
 function normPhoneLocal(v){
@@ -207,13 +96,25 @@ function isoTodayPlus(n){
   return `${y}-${m}-${d}`;
 }
 
-// ===== Branch Select =====
+// ===== Language toggle =====
+function setLang(newLang){
+  lang = newLang;
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+  trans.forEach(el => el.textContent = el.dataset[lang]);
+  toggleBtn.textContent = lang === "en" ? "AR" : "EN";
+  initBranches();
+  if (availabilityCache[selectedBranch]) renderCalendar(selectedBranch);
+}
+toggleBtn.addEventListener("click", () => setLang(lang === "en" ? "ar" : "en"));
+
+// ===== Branch select =====
 function initBranches(){
   branchSelect.innerHTML = "";
   BRANCHES.forEach(b=>{
     const opt = document.createElement("option");
     opt.value = b;
-    opt.textContent = (lang==="ar") ? branchNameAr(b) : branchNameEn(b);
+    opt.textContent = branchName(b);
     branchSelect.appendChild(opt);
   });
   branchSelect.value = selectedBranch;
@@ -228,101 +129,58 @@ branchSelect.addEventListener("change", async () => {
   renderCalendar(selectedBranch);
 });
 
-// ===== Availability preload =====
+// ===== Availability (NO JSONP) =====
 async function preloadBranchAvailability(branch){
   availMsg.className = "msg";
   availMsg.textContent = (lang==="ar") ? "جاري تحميل المواعيد..." : "Loading availability...";
 
   const api = BRANCH_API[branch];
+
   try {
-    // ping normal JSON
-    const ping = await fetchJson(api + "?action=ping&_=" + Date.now());
+    const ping = await fetchJsonWithTimeout(proxyUrl(api + "?action=ping"), 9000);
     const minDate = ping.minDate || isoTodayPlus(12);
 
     minDateText.textContent = (lang==="ar")
       ? `الحجز يبدأ من تاريخ ${fmtDateUI(minDate)}`
       : `Booking starts from ${fmtDateUI(minDate)}`;
 
-    // availability via JSONP (retries)
-    const url = api + "?action=availability_jsonp&start=" + encodeURIComponent(minDate) + "&days=" + encodeURIComponent(AVAIL_DAYS);
-    const res = await jsonpWithRetry(url, JSONP_RETRIES, JSONP_TIMEOUT_MS);
+    const av = await fetchJsonWithTimeout(
+      proxyUrl(api + `?action=availability&start=${encodeURIComponent(minDate)}&days=${encodeURIComponent(AVAIL_DAYS)}`),
+      12000
+    );
 
-    if (!res || !res.ok || !res.availability || !res.availability.days) throw new Error("Bad availability response");
+    if (!av || !av.ok || !av.availability || !av.availability.days) throw new Error("Bad availability response");
 
-    availabilityCache[branch] = res.availability;
-
+    availabilityCache[branch] = av.availability;
     availMsg.className = "msg ok";
     availMsg.textContent = (lang==="ar") ? "تم تحميل المواعيد" : "Availability loaded";
-  } catch (err) {
+
+  } catch (e) {
     availabilityCache[branch] = null;
-    availMsg.className = "msg bad";
-    // Message for phones that fail JSONP sometimes:
-    availMsg.textContent = (lang==="ar")
-      ? ("فشل تحميل المواعيد. لو المشكلة بتظهر على موبايل معين فقط، جرّب شبكة مختلفة أو افتح الموقع على Chrome. تفاصيل: " + err.message)
-      : ("Availability error. If it happens on some phones only, try another network or open with Chrome. Details: " + err.message);
     calendar.innerHTML = "";
+    availMsg.className = "msg bad";
+    availMsg.textContent = (lang==="ar")
+      ? ("فشل تحميل المواعيد: " + (e?.message || e))
+      : ("Availability error: " + (e?.message || e));
   }
 }
 
-// ===== Lookup cache (fastest) =====
-function cacheKeyForPhone(phone){ return "ae_lookup_" + phone; }
+// ===== Ultra-fast lookup (cache + staged) =====
+function cacheKey(phone){ return "ae_lookup_" + phone; }
 
-function loadLookupCache(phone){
+function loadCache(phone){
   try {
-    const raw = localStorage.getItem(cacheKeyForPhone(phone));
+    const raw = localStorage.getItem(cacheKey(phone));
     if (!raw) return null;
     const obj = JSON.parse(raw);
     if (!obj || !obj.t || !obj.data) return null;
     if ((Date.now() - obj.t) > LOOKUP_CACHE_TTL_MS) return null;
-    return obj.data;
+    return obj.data; // { customer, sourceBranch }
   } catch { return null; }
 }
 
-function saveLookupCache(phone, data){
-  try {
-    localStorage.setItem(cacheKeyForPhone(phone), JSON.stringify({ t: Date.now(), data }));
-  } catch {}
-}
-
-// ===== Lookup helpers (staged: selected branch first) =====
-async function lookupOneBranch(phone, branch){
-  const api = BRANCH_API[branch];
-  const url = api + "?action=lookup_jsonp&phone=" + encodeURIComponent(phone);
-  const res = await jsonpWithRetry(url, 1, LOOKUP_TIMEOUT_MS); // small retry
-  if (res && res.ok && res.customer && res.customer.ok && res.customer.found) {
-    return { found: true, branch, customer: res.customer.customer };
-  }
-  return { found: false };
-}
-
-async function lookupAcrossBranchesFast(phone){
-  // 1) Try selected branch first (fast path)
-  try {
-    const first = await lookupOneBranch(phone, selectedBranch);
-    if (first.found) return first;
-  } catch {}
-
-  // 2) Try the rest in parallel; resolve on first success
-  const others = BRANCHES.filter(b => b !== selectedBranch);
-
-  return await new Promise((resolve) => {
-    let done = false;
-    let pending = others.length;
-
-    if (pending === 0) return resolve({ found: false });
-
-    others.forEach(async (b) => {
-      try {
-        const hit = await lookupOneBranch(phone, b);
-        if (!done && hit.found) {
-          done = true;
-          return resolve(hit);
-        }
-      } catch {}
-      pending--;
-      if (!done && pending <= 0) resolve({ found: false });
-    });
-  });
+function saveCache(phone, data){
+  try { localStorage.setItem(cacheKey(phone), JSON.stringify({ t: Date.now(), data })); } catch {}
 }
 
 function setCustomerUI(customer, sourceBranch){
@@ -334,16 +192,51 @@ function setCustomerUI(customer, sourceBranch){
   cFilm.textContent  = customer.filmType || "—";
 
   sourceBadgeText.textContent = (lang==="ar")
-    ? ("البيانات من: " + branchNameAr(sourceBranch))
-    : ("Source: " + branchNameEn(sourceBranch));
+    ? ("البيانات من: " + (BRANCH_INFO[sourceBranch]?.ar || sourceBranch))
+    : ("Source: " + (BRANCH_INFO[sourceBranch]?.en || sourceBranch));
 }
 
-// ===== Search click =====
+async function lookupBranch(phone, branch){
+  const api = BRANCH_API[branch];
+  const res = await fetchJsonWithTimeout(
+    proxyUrl(api + `?action=lookup&phone=${encodeURIComponent(phone)}`),
+    9000
+  );
+  if (res && res.ok && res.customer && res.customer.ok && res.customer.found) {
+    return { found:true, branch, customer: res.customer.customer };
+  }
+  return { found:false };
+}
+
+async function lookupFast(phone){
+  // 1) Selected branch first (fast path)
+  try {
+    const first = await lookupBranch(phone, selectedBranch);
+    if (first.found) return first;
+  } catch {}
+
+  // 2) Early success parallel (resolve on first found)
+  const others = BRANCHES.filter(b => b !== selectedBranch);
+  return await new Promise((resolve) => {
+    let done = false;
+    let pending = others.length;
+    if (!pending) return resolve({ found:false });
+
+    others.forEach(async (b) => {
+      try {
+        const hit = await lookupBranch(phone, b);
+        if (!done && hit.found) { done = true; return resolve(hit); }
+      } catch {}
+      pending--;
+      if (!done && pending <= 0) resolve({ found:false });
+    });
+  });
+}
+
 searchBtn.addEventListener("click", async () => {
   const phone = normPhoneLocal(phoneInput.value);
-
-  lookupMsg.className = "msg";
   createMsg.textContent = "";
+  lookupMsg.className = "msg";
 
   if (!phone) {
     lookupMsg.className = "msg bad";
@@ -351,43 +244,43 @@ searchBtn.addEventListener("click", async () => {
     return;
   }
 
-  // 0) Instant from localStorage cache (fastest)
-  const cached = loadLookupCache(phone);
+  // 0) Instant cache => typically < 1 second
+  const cached = loadCache(phone);
   if (cached && cached.customer && cached.sourceBranch) {
     customerCache = { phone, ...cached.customer, sourceBranch: cached.sourceBranch };
     setCustomerUI(cached.customer, cached.sourceBranch);
     lookupMsg.className = "msg ok";
-    lookupMsg.textContent = (lang==="ar") ? "تم تحميل البيانات بسرعة (من الكاش)" : "Loaded instantly (cache)";
-    // refresh in background (optional)
-    lookupAcrossBranchesFast(phone).then(hit=>{
+    lookupMsg.textContent = (lang==="ar") ? "تم تحميل البيانات فورًا" : "Loaded instantly";
+
+    // background refresh (silent)
+    lookupFast(phone).then(hit=>{
       if (hit && hit.found) {
         customerCache = { phone, ...hit.customer, sourceBranch: hit.branch };
         setCustomerUI(hit.customer, hit.branch);
-        saveLookupCache(phone, { customer: hit.customer, sourceBranch: hit.branch });
+        saveCache(phone, { customer: hit.customer, sourceBranch: hit.branch });
       }
     });
     return;
   }
 
+  // Show searching
   lookupMsg.textContent = (lang==="ar") ? "جاري البحث..." : "Searching...";
   customerPanel.classList.add("hidden");
   customerCache = null;
 
-  const hit = await lookupAcrossBranchesFast(phone);
-
+  const hit = await lookupFast(phone);
   if (!hit.found) {
     lookupMsg.className = "msg bad";
     lookupMsg.textContent = (lang==="ar") ? "الرقم غير موجود في البيانات" : "Customer not found";
     return;
   }
 
-  lookupMsg.className = "msg ok";
-  lookupMsg.textContent = (lang==="ar") ? "تم العثور على بيانات العميل" : "Customer found";
-
   customerCache = { phone, ...hit.customer, sourceBranch: hit.branch };
   setCustomerUI(hit.customer, hit.branch);
+  saveCache(phone, { customer: hit.customer, sourceBranch: hit.branch });
 
-  saveLookupCache(phone, { customer: hit.customer, sourceBranch: hit.branch });
+  lookupMsg.className = "msg ok";
+  lookupMsg.textContent = (lang==="ar") ? "تم العثور على بيانات العميل" : "Customer found";
 });
 
 // ===== Calendar render =====
@@ -422,19 +315,14 @@ function renderCalendar(branch){
           : ("Selected: " + fmtDateUI(day.date));
       });
     }
-
     calendar.appendChild(div);
   });
 }
 
 /* =========================================
-   SUCCESS CONFIRMATION WIDGET (AFTER BOOKING)
-   - QR + Branch instructions + location/map
+   SUCCESS WIDGET (after booking) — with QR
    ========================================= */
-
-function qrUrl_(text) {
-  // Simple QR image (no library). Works everywhere.
-  // If blocked on some networks, you can replace with another provider.
+function qrUrl_(text){
   const data = encodeURIComponent(text);
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${data}`;
 }
@@ -517,7 +405,6 @@ function ensureSuccessModal_(){
   `;
   document.body.appendChild(modal);
 
-  // Inject premium CSS
   const style = document.createElement("style");
   style.textContent = `
     #successModal{position:fixed;inset:0;z-index:10000;display:none}
@@ -641,34 +528,34 @@ function openSuccessModal_(data){
   const isAr = (lang === "ar");
 
   const bi = BRANCH_INFO[data.branch] || {};
-  const branchLabel = isAr ? (bi.name_ar || branchNameAr(data.branch)) : (bi.name_en || branchNameEn(data.branch));
-  const addr = isAr ? (bi.address_ar || "—") : (bi.address_en || "—");
+  const branchLabel = isAr ? (bi.ar || data.branch) : (bi.en || data.branch);
+  const addr = isAr ? (bi.addr_ar || "—") : (bi.addr_en || "—");
   const mapUrl = bi.map || "#";
-  const instr = isAr ? (bi.instruction_ar || "") : (bi.instruction_en || "");
-  const hours = isAr ? (bi.hours_ar || "") : (bi.hours_en || "");
 
-  // Labels
+  const instruction_ar = `تقدر تزور فرع ${bi.ar || data.branch} من الساعة 10 صباحًا إلى 1 ظهرًا. حضرتك بس تسيب العربية هناك، وفريق الـ Operation هيستلمها ويتابع كل حاجة ويهتم بيها بالكامل.`;
+  const instruction_en = `You can visit ${bi.en || data.branch} branch from 10:00 AM to 1:00 PM. Please leave the car there, and our Operation team will receive it and handle everything end-to-end.`;
+  const instr = isAr ? instruction_ar : instruction_en;
+
+  // labels
   document.getElementById("smTitle").textContent = isAr ? "تم تأكيد الحجز" : "Booking Confirmed";
   document.getElementById("smIdLabel").textContent = isAr ? "رقم الحجز" : "Booking ID";
   document.getElementById("smCopyText").textContent = isAr ? "نسخ" : "Copy";
-
   document.getElementById("smBranchK").textContent = isAr ? "الفرع" : "Branch";
-  document.getElementById("smDateK").textContent   = isAr ? "التاريخ" : "Date";
-  document.getElementById("smPhoneK").textContent  = isAr ? "الموبايل" : "Phone";
-  document.getElementById("smNameK").textContent   = isAr ? "الاسم" : "Name";
-  document.getElementById("smCarK").textContent    = isAr ? "السيارة" : "Car";
-  document.getElementById("smNotesK").textContent  = isAr ? "ملاحظات" : "Notes";
-
+  document.getElementById("smDateK").textContent = isAr ? "التاريخ" : "Date";
+  document.getElementById("smPhoneK").textContent = isAr ? "الموبايل" : "Phone";
+  document.getElementById("smNameK").textContent = isAr ? "الاسم" : "Name";
+  document.getElementById("smCarK").textContent = isAr ? "السيارة" : "Car";
+  document.getElementById("smNotesK").textContent = isAr ? "ملاحظات" : "Notes";
   document.getElementById("smLocTitle").textContent = isAr ? "الموقع" : "Location";
   document.getElementById("smMapText").textContent = isAr ? "فتح الخريطة" : "Open Map";
   document.getElementById("smOkText").textContent = isAr ? "تم" : "Done";
   document.getElementById("smQrCap").textContent = isAr ? "امسح الكود" : "Scan QR";
 
-  // Values
+  // values
   document.getElementById("smIdValue").textContent = data.orderId || "—";
   document.getElementById("smMini").textContent = isAr
-    ? `الفرع: ${branchLabel} • التاريخ: ${fmtDateUI(data.dateISO)}${hours ? " • الوقت: " + hours : ""}`
-    : `Branch: ${branchLabel} • Date: ${fmtDateUI(data.dateISO)}${hours ? " • Hours: " + hours : ""}`;
+    ? `الفرع: ${branchLabel} • التاريخ: ${fmtDateUI(data.dateISO)}`
+    : `Branch: ${branchLabel} • Date: ${fmtDateUI(data.dateISO)}`;
 
   document.getElementById("smBranchV").textContent = branchLabel;
   document.getElementById("smDateV").textContent   = fmtDateUI(data.dateISO);
@@ -678,30 +565,21 @@ function openSuccessModal_(data){
   document.getElementById("smNotesV").textContent  = data.notes || "—";
 
   document.getElementById("smLocAddr").textContent = addr;
-  const mapA = document.getElementById("smLocMap");
-  mapA.href = mapUrl;
+  document.getElementById("smLocMap").href = mapUrl;
 
-  document.getElementById("smInstText").textContent = instr || (isAr ? "تم حفظ الحجز بنجاح." : "Your booking has been saved successfully.");
+  document.getElementById("smInstText").textContent = instr;
 
-  // QR content (include ID + branch + date)
   const qrText = `Abdo El Amir Booking\nID: ${data.orderId}\nBranch: ${branchLabel}\nDate: ${fmtDateUI(data.dateISO)}\nPhone: ${data.phone || ""}`;
-  const qrImg = document.getElementById("smQrImg");
-  qrImg.src = qrUrl_(qrText);
+  document.getElementById("smQrImg").src = qrUrl_(qrText);
 
-  // Show modal and handlers
   modal.classList.add("show");
   const close = () => modal.classList.remove("show");
 
-  const closeBtn = document.getElementById("smClose");
-  const okBtn = document.getElementById("smOk");
-  const backdrop = modal.querySelector(".sm-backdrop");
+  document.getElementById("smClose").onclick = close;
+  document.getElementById("smOk").onclick = close;
+  modal.querySelector(".sm-backdrop").onclick = close;
+
   const copyBtn = document.getElementById("smCopy");
-
-  closeBtn.onclick = close;
-  okBtn.onclick = close;
-  backdrop.onclick = close;
-
-  // Copy ID
   copyBtn.onclick = async () => {
     try {
       await navigator.clipboard.writeText(String(data.orderId || ""));
@@ -714,9 +592,7 @@ function openSuccessModal_(data){
     }
   };
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") close();
-  }, { once: true });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); }, { once:true });
 }
 
 // ===== Create booking =====
@@ -734,12 +610,11 @@ createBtn.addEventListener("click", async () => {
     return;
   }
 
-  // Lock UI briefly
   createBtn.disabled = true;
   createBtn.style.opacity = "0.75";
 
   const api = BRANCH_API[selectedBranch];
-  const url =
+  const createUrl =
     api +
     "?action=create" +
     "&phone=" + encodeURIComponent(customerCache.phone) +
@@ -749,13 +624,12 @@ createBtn.addEventListener("click", async () => {
     "&carModel=" + encodeURIComponent(customerCache.carModel || "") +
     "&carColor=" + encodeURIComponent(customerCache.carColor || "") +
     "&carYear=" + encodeURIComponent(customerCache.carYear || "") +
-    "&filmType=" + encodeURIComponent(customerCache.filmType || "") +
-    "&_=" + Date.now();
+    "&filmType=" + encodeURIComponent(customerCache.filmType || "");
 
   createMsg.textContent = (lang==="ar") ? "جاري إنشاء الحجز..." : "Creating booking...";
 
   try {
-    const res = await fetchJson(url);
+    const res = await fetchJsonWithTimeout(proxyUrl(createUrl), 12000);
     if (!res || !res.ok) throw new Error(res && res.message ? res.message : "Create failed");
 
     createMsg.className = "msg ok";
@@ -763,7 +637,6 @@ createBtn.addEventListener("click", async () => {
       ? ("تم تأكيد الحجز. رقم: " + res.orderId)
       : ("Booking confirmed. ID: " + res.orderId);
 
-    // ✅ Success widget AFTER booking is saved
     openSuccessModal_({
       orderId: res.orderId,
       branch: selectedBranch,
@@ -776,26 +649,22 @@ createBtn.addEventListener("click", async () => {
       notes: notesInput.value || ""
     });
 
-    // Refresh availability (fast)
     await preloadBranchAvailability(selectedBranch);
     renderCalendar(selectedBranch);
 
-    // reset selected
     selectedDateISO = "";
     notesInput.value = "";
 
-  } catch (err) {
+  } catch (e) {
     createMsg.className = "msg bad";
-    createMsg.textContent = (lang==="ar")
-      ? ("فشل إنشاء الحجز: " + err.message)
-      : ("Booking failed: " + err.message);
+    createMsg.textContent = (lang==="ar") ? ("فشل إنشاء الحجز: " + (e?.message || e)) : ("Booking failed: " + (e?.message || e));
   } finally {
     createBtn.disabled = false;
     createBtn.style.opacity = "1";
   }
 });
 
-// ===== First load =====
+// ===== Init =====
 (async function init(){
   setLang("en");
   await preloadBranchAvailability(selectedBranch);
