@@ -4,61 +4,43 @@
   <meta charset="UTF-8" />
   <title>Abdo El Amir — Revisit Booking</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Roboto -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-
-  <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
-
   <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
-
 <header class="banner">
   <div class="banner-overlay"></div>
   <div class="banner-content fade-in">
     <img src="images/logo.png" alt="Abdo El Amir" class="logo">
-
     <h1 data-en="Abdo El Amir" data-ar="عبده الأمير">Abdo El Amir</h1>
-
     <p class="subtitle"
       data-en="Revisit Booking — Choose any branch. Booking starts after the minimum days."
       data-ar="حجز المراجعة — اختار أي فرع. الحجز يبدأ بعد عدد الأيام المحدد.">
       Revisit Booking — Choose any branch.
     </p>
-
     <div class="lang-toggle">
       <button id="langToggle">AR</button>
     </div>
   </div>
 </header>
-
 <main class="wrap">
-
-  <!-- Phone Search -->
   <section class="card reveal visible">
     <div class="card-title">
       <i class="fa-solid fa-magnifying-glass"></i>
       <h2 data-en="Search by Mobile Number" data-ar="ابحث برقم الموبايل">Search by Mobile Number</h2>
     </div>
-
     <div class="row">
       <div class="field">
         <label data-en="Mobile Number" data-ar="رقم الموبايل">Mobile Number</label>
         <input id="phoneInput" inputmode="numeric" placeholder="010xxxxxxxxx" maxlength="14">
       </div>
-
       <button id="searchBtn" class="primary">
         <i class="fa-solid fa-bolt"></i>
         <span data-en="Search" data-ar="بحث">Search</span>
       </button>
     </div>
-
     <div id="lookupMsg" class="msg"></div>
-
-    <!-- Customer Panel -->
     <div id="customerPanel" class="customer-panel hidden">
       <div class="panel-head">
         <div class="badge" id="sourceBadge">
@@ -66,28 +48,23 @@
           <span id="sourceBadgeText">—</span>
         </div>
       </div>
-
       <div class="grid">
         <div class="info">
           <div class="k" data-en="Name" data-ar="الاسم">Name</div>
           <div class="v" id="cName">—</div>
         </div>
-
         <div class="info">
           <div class="k" data-en="Car Model" data-ar="موديل العربية">Car Model</div>
           <div class="v" id="cModel">—</div>
         </div>
-
         <div class="info">
           <div class="k" data-en="Car Color" data-ar="لون العربية">Car Color</div>
           <div class="v" id="cColor">—</div>
         </div>
-
         <div class="info">
           <div class="k" data-en="Car Year" data-ar="سنة العربية">Car Year</div>
           <div class="v" id="cYear">—</div>
         </div>
-
         <div class="info wide">
           <div class="k" data-en="Type of Films" data-ar="نوع الفيلم">Type of Films</div>
           <div class="v" id="cFilm">—</div>
@@ -95,61 +72,61 @@
       </div>
     </div>
   </section>
-
-  <!-- Branch -->
   <section class="card reveal visible">
     <div class="card-title">
       <i class="fa-solid fa-location-dot"></i>
       <h2 data-en="Choose Booking Branch" data-ar="اختر فرع الحجز">Choose Booking Branch</h2>
     </div>
-
     <div class="row">
       <div class="field grow">
         <label data-en="Branch" data-ar="الفرع">Branch</label>
         <select id="branchSelect"></select>
       </div>
-
       <div class="pill" id="minDatePill">
         <i class="fa-solid fa-circle-info"></i>
         <span id="minDateText">—</span>
       </div>
     </div>
-
     <div id="availMsg" class="msg"></div>
   </section>
-
-  <!-- Calendar -->
   <section class="card reveal visible">
     <div class="card-title">
       <i class="fa-solid fa-calendar-days"></i>
       <h2 data-en="Choose Booking Day" data-ar="اختر يوم الحجز">Choose Booking Day</h2>
     </div>
+    <div class="weekNav">
+  <div class="titleRow">
+    <i class="fa-solid fa-calendar-days"></i>
+    <h2 data-en="Choose Booking Day" data-ar="اختر يوم الحجز">Choose Booking Day</h2>
+  </div>
+  <div class="weekBtns">
+    <button id="weekPrev" class="weekBtn" aria-label="Previous week">
+      <i class="fa-solid fa-chevron-left"></i>
+    </button>
+    <button id="weekNext" class="weekBtn" aria-label="Next week">
+      <i class="fa-solid fa-chevron-right"></i>
+    </button>
+  </div>
+</div>
 <button id="weekPrev" class="weekBtn" aria-label="Previous week"><i class="fa-solid fa-chevron-left"></i></button>
 <button id="weekNext" class="weekBtn" aria-label="Next week"><i class="fa-solid fa-chevron-right"></i></button>
     <div class="calendar" id="calendar"></div>
-
     <div class="row">
       <div class="field grow">
         <label data-en="Notes (optional)" data-ar="ملاحظات (اختياري)">Notes</label>
         <input id="notesInput" placeholder="...">
       </div>
-
       <button id="createBtn" class="gold">
         <i class="fa-solid fa-check"></i>
         <span data-en="Confirm Booking" data-ar="تأكيد الحجز">Confirm Booking</span>
       </button>
     </div>
-
     <div id="createMsg" class="msg"></div>
   </section>
-
   <footer class="footer">
     <p>© 2026 Abdo El Amir</p>
   </footer>
-
 </main>
-
 <script src="script.js"></script>
 </body>
 </html>
-
